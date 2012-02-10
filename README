@@ -1,0 +1,19 @@
+===================
+dazeus-plugin-karma
+===================
+
+This directory contains the Karma plugin from DaZeus. It uses the embedded
+DaZeus 2 database to store the karma properties, in the same format as the
+older karma plugins. When running it, you only need to specify the socket
+path (with 'unix:' or 'tcp:') as the first parameter; it will attach and
+start monitoring traffic immediately.
+
+Use the following commands to build and the application:
+  qmake
+  make
+  ./dazeus-plugin-karma unix:dazeus.sock
+
+If your DaZeus2 library is not in an auto-detectable location, you can give
+qmake a hand:
+  qmake -after "QMAKE_CXXFLAGS += -I/path/to/libdazeus-qt" \
+        -after "QMAKE_LIBS += -L/path/to/libdazeus-qt -L/path/to/libdazeus/lib"
