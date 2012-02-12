@@ -25,7 +25,7 @@ KarmaPlugin::KarmaPlugin(const QString &socketfile)
 , d(new DaZeus())
 {
 	d->open(socketfile);
-	d->subscribe("MESSAGE");
+	d->subscribe("PRIVMSG");
 	connect(d,    SIGNAL(newEvent(DaZeus::Event*)),
 	        this, SLOT(  newEvent(DaZeus::Event*)));
 }
@@ -55,7 +55,7 @@ int KarmaPlugin::modifyKarma(const QString &network, const QString &object, bool
 }
 
 void KarmaPlugin::newEvent(DaZeus::Event *e) {
-	if(e->event != "MESSAGE") return;
+	if(e->event != "PRIVMSG") return;
 	if(e->parameters.size() < 4) {
 		qWarning() << "Incorrect parameter size for message received";
 		return;
