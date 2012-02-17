@@ -19,6 +19,7 @@ class KarmaPlugin : public QObject
 
   private slots:
     void newEvent(DaZeus::Event*);
+    void connectionFailed();
 
   private:
     int modifyKarma(const QString &network, const QString &object, bool increase);

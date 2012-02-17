@@ -24,31 +24,52 @@ KarmaPlugin::KarmaPlugin(const QString &socketfile)
 : QObject()
 , d(new DaZeus())
 {
-	d->open(socketfile);
-	d->subscribe("PRIVMSG");
+	if(!d->open(socketfile) || !d->subscribe("PRIVMSG")) {
+		qWarning() << d->error();
+		delete d;
+		d = 0;
+		return;
+	}
 	connect(d,    SIGNAL(newEvent(DaZeus::Event*)),
 	        this, SLOT(  newEvent(DaZeus::Event*)));
+	connect(d,    SIGNAL(connectionFailed()),
+	        this, SLOT(  connectionFailed()));
 }
 
 KarmaPlugin::~KarmaPlugin() {
 	delete d;
 }
 
+void KarmaPlugin::connectionFailed() {
+	// TODO: handle this better
+	qWarning() << "Error: connection failed: " << d->error();
+	delete d;
+	d = 0;
+	QCoreApplication::exit(1);
+}
+
 int KarmaPlugin::modifyKarma(const QString &network, const QString &object, bool increase) {
 	DaZeus::Scope s = DaZeus::Scope::Scope(network);
 	QString qualifiedName = QLatin1String("perl.DazKarma.karma_") + object;
 	int current = d->getProperty(qualifiedName, s).toInt();
+	if(current == 0 && !d->error().isNull()) {
+		qWarning() << "Could not getProperty(): " << d->error();
+	}
 
 	if(increase)
 		++current;
 	else	--current;
 
+	bool res;
 	if(current == 0) {
-		d->unsetProperty(qualifiedName, s);
+		res = d->unsetProperty(qualifiedName, s);
 		// Also unset global property, in case one is left behind
-		d->unsetProperty(qualifiedName, DaZeus::Scope::Scope());
+		if(res) res = d->unsetProperty(qualifiedName, DaZeus::Scope::Scope());
 	} else {
-		d->setProperty(qualifiedName, QString::number(current), s);
+		res = d->setProperty(qualifiedName, QString::number(current), s);
+	}
+	if(!res) {
+		qWarning() << "Could not (un)setProperty(): " << d->error();
 	}
 
 	return current;
@@ -73,10 +94,17 @@ void KarmaPlugin::newEvent(DaZeus::Event *e) {
 	if(message.startsWith("}karma ")) {
 		QString object = message.mid(7).trimmed();
 		int current = d->getProperty("perl.DazKarma.karma_" + object, s).toInt();
+		bool res;
 		if(current == 0) {
-			d->message(network, recv, object + " has neutral karma.");
+			if(!d->error().isNull()) {
+				qWarning() << "Failed to fetch karma: " << d->error();
+			}
+			res = d->message(network, recv, object + " has neutral karma.");
 		} else {
-			d->message(network, recv, object + " has a karma of " + QString::number(current) + ".");
+			res = d->message(network, recv, object + " has a karma of " + QString::number(current) + ".");
+		}
+		if(!res) {
+			qWarning() << "Failed to send message: " << d->error();
 		}
 		return;
 	}
@@ -157,7 +185,9 @@ void KarmaPlugin::newEvent(DaZeus::Event *e) {
 		qDebug() << message;
 		if(ender == ']') {
 			// Verbose mode, print the result
-			d->message(network, recv, message);
+			if(!d->message(network, recv, message)) {
+				qWarning() << "Failed to send message: " << d->error();
+			}
 		}
 	}
 }
