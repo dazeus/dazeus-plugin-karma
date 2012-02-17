@@ -49,7 +49,8 @@ void KarmaPlugin::connectionFailed() {
 }
 
 int KarmaPlugin::modifyKarma(const QString &network, const QString &object, bool increase) {
-	DaZeus::Scope s = DaZeus::Scope::Scope(network);
+	DaZeus::Scope s(network);
+	DaZeus::Scope g;
 	QString qualifiedName = QLatin1String("perl.DazKarma.karma_") + object;
 	int current = d->getProperty(qualifiedName, s).toInt();
 	if(current == 0 && !d->error().isNull()) {
@@ -64,7 +65,7 @@ int KarmaPlugin::modifyKarma(const QString &network, const QString &object, bool
 	if(current == 0) {
 		res = d->unsetProperty(qualifiedName, s);
 		// Also unset global property, in case one is left behind
-		if(res) res = d->unsetProperty(qualifiedName, DaZeus::Scope::Scope());
+		if(res) res = d->unsetProperty(qualifiedName, g);
 	} else {
 		res = d->setProperty(qualifiedName, QString::number(current), s);
 	}
@@ -85,7 +86,7 @@ void KarmaPlugin::newEvent(DaZeus::Event *e) {
 	QString origin  = e->parameters[1];
 	QString recv    = e->parameters[2];
 	QString message = e->parameters[3];
-	DaZeus::Scope s = DaZeus::Scope::Scope(network);
+	DaZeus::Scope s(network);
 	// TODO: use getNick()
 	if(!recv.startsWith('#')) {
 		// reply to PM
