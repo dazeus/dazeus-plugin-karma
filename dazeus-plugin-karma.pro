@@ -7,7 +7,7 @@ CONFIG -= app_bundle
 
 DEPENDPATH += .
 INCLUDEPATH += . ..
-LIBS += -ldazeus -ldazeus-qt
+LIBS += -ldazeus-qt -ldazeus
 MOC_DIR = build
 OBJECTS_DIR = build
 
