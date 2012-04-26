@@ -10,6 +10,7 @@ INCLUDEPATH += . ..
 LIBS += -ldazeus-qt -ldazeus
 MOC_DIR = build
 OBJECTS_DIR = build
+QT -= gui
 
 # Input
 SOURCES += karmaplugin.cpp
