@@ -51,7 +51,7 @@ void KarmaPlugin::connectionFailed() {
 int KarmaPlugin::modifyKarma(const QString &network, const QString &object, bool increase) {
 	DaZeus::Scope s(network);
 	DaZeus::Scope g;
-	QString qualifiedName = QLatin1String("perl.DazKarma.karma_") + object;
+	QString qualifiedName = QLatin1String("perl.DazKarma.karma_") + object.toLower();
 	int current = d->getProperty(qualifiedName, s).toInt();
 	if(current == 0 && !d->error().isNull()) {
 		qWarning() << "Could not getProperty(): " << d->error();
@@ -94,7 +94,7 @@ void KarmaPlugin::newEvent(DaZeus::Event *e) {
 	}
 	if(message.startsWith("}karma ")) {
 		QString object = message.mid(7).trimmed();
-		int current = d->getProperty("perl.DazKarma.karma_" + object, s).toInt();
+		int current = d->getProperty("perl.DazKarma.karma_" + object.toLower(), s).toInt();
 		bool res;
 		if(current == 0) {
 			if(!d->error().isNull()) {
