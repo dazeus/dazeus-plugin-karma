@@ -63,7 +63,7 @@ int KarmaPlugin::modifyKarma(const QString &network, const QString &object, bool
 	
 	// Check for non-neutral karma and adjust counters accordingly
 	if (current > 0 && currUp == 0) currUp = current;
-	if (current < 0 && currDown == 0) currDown = current;
+	if (current < 0 && currDown == 0) currDown = -current;
 
 	if(increase) {
 		++current;
