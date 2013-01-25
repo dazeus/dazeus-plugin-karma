@@ -60,6 +60,10 @@ int KarmaPlugin::modifyKarma(const QString &network, const QString &object, bool
 	if( (current == 0 || currUp == 0 || currDown == 0) && !d->error().isNull()) {
 		qWarning() << "Could not getProperty(): " << d->error();
 	}
+	
+	// Check for non-neutral karma and adjust counters accordingly
+	if (current > 0 && currUp == 0) currUp = current;
+	if (current < 0 && currDown == 0) currDown = current;
 
 	if(increase) {
 		++current;
@@ -76,10 +80,12 @@ int KarmaPlugin::modifyKarma(const QString &network, const QString &object, bool
 		if(res) res = d->unsetProperty(qualifiedName, g);
 		// Delete history of karma in/decreases, since they are equal
 		// Comment out when history seems important
+		/*
 		upres = d->unsetProperty(karmaUpName, s);
 		downres = d->unsetProperty(karmaDownName, s);
 		if (upres) upres = d->unsetProperty(karmaUpName, g); // global unset
 		if (downres) downres = d->unsetProperty(karmaDownName, g); // global unset
+		*/
 	} else {
 		res = d->setProperty(qualifiedName, QString::number(current), s);
 		upres = d->setProperty(karmaUpName, QString::number(currUp), s);
