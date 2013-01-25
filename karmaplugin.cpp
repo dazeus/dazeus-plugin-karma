@@ -52,24 +52,40 @@ int KarmaPlugin::modifyKarma(const QString &network, const QString &object, bool
 	DaZeus::Scope s(network);
 	DaZeus::Scope g;
 	QString qualifiedName = QLatin1String("perl.DazKarma.karma_") + object.toLower();
+	QString karmaUpName   = QLatin1String("perl.DazKarma.upkarma_" + object.toLower());
+	QString karmaDownName = QLatin1String("perl.DazKarma.downkarma_" + object.toLower());
 	int current = d->getProperty(qualifiedName, s).toInt();
-	if(current == 0 && !d->error().isNull()) {
+	int currUp = d->getProperty(karmaUpName, s).toInt();
+	int currDown = d->getProperty(karmaDownName, s).toInt();
+	if( (current == 0 || currUp == 0 || currDown == 0) && !d->error().isNull()) {
 		qWarning() << "Could not getProperty(): " << d->error();
 	}
 
-	if(increase)
+	if(increase) {
 		++current;
-	else	--current;
+		++currUp;
+	} else {
+		--current;
+		++currDown;
+	}
 
-	bool res;
+	bool res, upres, downres;
 	if(current == 0) {
 		res = d->unsetProperty(qualifiedName, s);
 		// Also unset global property, in case one is left behind
 		if(res) res = d->unsetProperty(qualifiedName, g);
+		// Delete history of karma in/decreases, since they are equal
+		// Comment out when history seems important
+		upres = d->unsetProperty(karmaUpName, s);
+		downres = d->unsetProperty(karmaDownName, s);
+		if (upres) upres = d->unsetProperty(karmaUpName, g); // global unset
+		if (downres) downres = d->unsetProperty(karmaDownName, g); // global unset
 	} else {
 		res = d->setProperty(qualifiedName, QString::number(current), s);
+		upres = d->setProperty(karmaUpName, QString::number(currUp), s);
+		dowmres = d->setProperty(karmaDownName, QString::number(currDown), s);
 	}
-	if(!res) {
+	if( !res || !upres || !downres ) {
 		qWarning() << "Could not (un)setProperty(): " << d->error();
 	}
 
@@ -102,7 +118,7 @@ void KarmaPlugin::newEvent(DaZeus::Event *e) {
 			}
 			res = d->message(network, recv, object + " has neutral karma.");
 		} else {
-			res = d->message(network, recv, object + " has a karma of " + QString::number(current) + ".");
+			res = d->message(network, recv, object + " has a karma of " + QString::number(current) + " (+" + QString::number(currUp) + ", -" + QString::number(currDown) + ").");
 		}
 		if(!res) {
 			qWarning() << "Failed to send message: " << d->error();
