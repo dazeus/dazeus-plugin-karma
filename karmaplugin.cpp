@@ -78,8 +78,10 @@ int KarmaPlugin::modifyKarma(const QString &network, const QString &object, bool
 		res = d->unsetProperty(qualifiedName, s);
 		// Also unset global property, in case one is left behind
 		if(res) res = d->unsetProperty(qualifiedName, g);
-		upres = true;
-		downres = true;
+
+		// Set counters to match with neutral karma
+		upres = d->setProperty(karmaUpName, QString::number(currUp), s);
+		downres = d->setProperty(karmaDownName, QString::number(currDown), s);
 	} else {
 		res = d->setProperty(qualifiedName, QString::number(current), s);
 		upres = d->setProperty(karmaUpName, QString::number(currUp), s);
