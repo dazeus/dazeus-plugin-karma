@@ -78,6 +78,8 @@ int KarmaPlugin::modifyKarma(const QString &network, const QString &object, bool
 		res = d->unsetProperty(qualifiedName, s);
 		// Also unset global property, in case one is left behind
 		if(res) res = d->unsetProperty(qualifiedName, g);
+		upres = true;
+		downres = true;
 	} else {
 		res = d->setProperty(qualifiedName, QString::number(current), s);
 		upres = d->setProperty(karmaUpName, QString::number(currUp), s);
