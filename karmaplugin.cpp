@@ -111,6 +111,8 @@ void KarmaPlugin::newEvent(DaZeus::Event *e) {
 	if(message.startsWith("}karma ")) {
 		QString object = message.mid(7).trimmed();
 		int current = d->getProperty("perl.DazKarma.karma_" + object.toLower(), s).toInt();
+		int currUp = d->getProperty("perl.DazKarma.upkarma_" + object.toLower(), s).toInt();
+		int currDown = d->getProperty("perl.DazKarma.downkarma_" + object.toLower(), s).toInt();
 		bool res;
 		if(current == 0) {
 			if(!d->error().isNull()) {
