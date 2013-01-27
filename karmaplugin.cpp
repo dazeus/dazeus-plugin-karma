@@ -52,24 +52,42 @@ int KarmaPlugin::modifyKarma(const QString &network, const QString &object, bool
 	DaZeus::Scope s(network);
 	DaZeus::Scope g;
 	QString qualifiedName = QLatin1String("perl.DazKarma.karma_") + object.toLower();
+	QString karmaUpName   = QLatin1String("perl.DazKarma.upkarma_") + object.toLower();
+	QString karmaDownName = QLatin1String("perl.DazKarma.downkarma_") + object.toLower();
 	int current = d->getProperty(qualifiedName, s).toInt();
-	if(current == 0 && !d->error().isNull()) {
+	int currUp = d->getProperty(karmaUpName, s).toInt();
+	int currDown = d->getProperty(karmaDownName, s).toInt();
+	if( (current == 0 || currUp == 0 || currDown == 0) && !d->error().isNull()) {
 		qWarning() << "Could not getProperty(): " << d->error();
 	}
+	
+	// Check for non-consistent karma and adjust counters accordingly
+	if (current < (currUp - currDown)) currDown += -current - (currUp - currDown);
+	if (current > (currUp - currDown)) currUp += current - (currUp - currDown);
 
-	if(increase)
+	if(increase) {
 		++current;
-	else	--current;
+		++currUp;
+	} else {
+		--current;
+		++currDown;
+	}
 
-	bool res;
+	bool res, upres, downres;
 	if(current == 0) {
 		res = d->unsetProperty(qualifiedName, s);
 		// Also unset global property, in case one is left behind
 		if(res) res = d->unsetProperty(qualifiedName, g);
+
+		// Set counters to match with neutral karma
+		upres = d->setProperty(karmaUpName, QString::number(currUp), s);
+		downres = d->setProperty(karmaDownName, QString::number(currDown), s);
 	} else {
 		res = d->setProperty(qualifiedName, QString::number(current), s);
+		upres = d->setProperty(karmaUpName, QString::number(currUp), s);
+		downres = d->setProperty(karmaDownName, QString::number(currDown), s);
 	}
-	if(!res) {
+	if( !res || !upres || !downres ) {
 		qWarning() << "Could not (un)setProperty(): " << d->error();
 	}
 
@@ -95,6 +113,13 @@ void KarmaPlugin::newEvent(DaZeus::Event *e) {
 	if(message.startsWith("}karma ")) {
 		QString object = message.mid(7).trimmed();
 		int current = d->getProperty("perl.DazKarma.karma_" + object.toLower(), s).toInt();
+		int currUp = d->getProperty("perl.DazKarma.upkarma_" + object.toLower(), s).toInt();
+		int currDown = d->getProperty("perl.DazKarma.downkarma_" + object.toLower(), s).toInt();
+
+		// Check for non-consistent karma and adjust counters accordingly
+		if (current < (currUp - currDown)) currDown += -current - (currUp - currDown);
+		if (current > (currUp - currDown)) currUp += current - (currUp - currDown);
+
 		bool res;
 		if(current == 0) {
 			if(!d->error().isNull()) {
@@ -102,7 +127,7 @@ void KarmaPlugin::newEvent(DaZeus::Event *e) {
 			}
 			res = d->message(network, recv, object + " has neutral karma.");
 		} else {
-			res = d->message(network, recv, object + " has a karma of " + QString::number(current) + ".");
+			res = d->message(network, recv, object + " has a karma of " + QString::number(current) + " (+" + QString::number(currUp) + ", -" + QString::number(currDown) + ").");
 		}
 		if(!res) {
 			qWarning() << "Failed to send message: " << d->error();
