@@ -52,8 +52,8 @@ int KarmaPlugin::modifyKarma(const QString &network, const QString &object, bool
 	DaZeus::Scope s(network);
 	DaZeus::Scope g;
 	QString qualifiedName = QLatin1String("perl.DazKarma.karma_") + object.toLower();
-	QString karmaUpName   = QLatin1String("perl.DazKarma.upkarma_" + object.toLower());
-	QString karmaDownName = QLatin1String("perl.DazKarma.downkarma_" + object.toLower());
+	QString karmaUpName   = QLatin1String("perl.DazKarma.upkarma_") + object.toLower();
+	QString karmaDownName = QLatin1String("perl.DazKarma.downkarma_") + object.toLower();
 	int current = d->getProperty(qualifiedName, s).toInt();
 	int currUp = d->getProperty(karmaUpName, s).toInt();
 	int currDown = d->getProperty(karmaDownName, s).toInt();
@@ -78,14 +78,6 @@ int KarmaPlugin::modifyKarma(const QString &network, const QString &object, bool
 		res = d->unsetProperty(qualifiedName, s);
 		// Also unset global property, in case one is left behind
 		if(res) res = d->unsetProperty(qualifiedName, g);
-		// Delete history of karma in/decreases, since they are equal
-		// Comment out when history seems important
-		/*
-		upres = d->unsetProperty(karmaUpName, s);
-		downres = d->unsetProperty(karmaDownName, s);
-		if (upres) upres = d->unsetProperty(karmaUpName, g); // global unset
-		if (downres) downres = d->unsetProperty(karmaDownName, g); // global unset
-		*/
 	} else {
 		res = d->setProperty(qualifiedName, QString::number(current), s);
 		upres = d->setProperty(karmaUpName, QString::number(currUp), s);
