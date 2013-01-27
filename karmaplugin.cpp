@@ -61,9 +61,9 @@ int KarmaPlugin::modifyKarma(const QString &network, const QString &object, bool
 		qWarning() << "Could not getProperty(): " << d->error();
 	}
 	
-	// Check for non-neutral karma and adjust counters accordingly
-	if (current > 0 && currUp == 0) currUp = current;
-	if (current < 0 && currDown == 0) currDown = -current;
+	// Check for non-consistent karma and adjust counters accordingly
+	if (current < (currUp - currDown)) currDown += -current - (currUp - currDown);
+	if (current > (currUp - currDown)) currUp += current - (currUp - currDown);
 
 	if(increase) {
 		++current;
@@ -115,6 +115,11 @@ void KarmaPlugin::newEvent(DaZeus::Event *e) {
 		int current = d->getProperty("perl.DazKarma.karma_" + object.toLower(), s).toInt();
 		int currUp = d->getProperty("perl.DazKarma.upkarma_" + object.toLower(), s).toInt();
 		int currDown = d->getProperty("perl.DazKarma.downkarma_" + object.toLower(), s).toInt();
+
+		// Check for non-consistent karma and adjust counters accordingly
+		if (current < (currUp - currDown)) currDown += -current - (currUp - currDown);
+		if (current > (currUp - currDown)) currUp += current - (currUp - currDown);
+
 		bool res;
 		if(current == 0) {
 			if(!d->error().isNull()) {
