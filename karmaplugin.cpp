@@ -81,7 +81,7 @@ int KarmaPlugin::modifyKarma(const QString &network, const QString &object, bool
 	} else {
 		res = d->setProperty(qualifiedName, QString::number(current), s);
 		upres = d->setProperty(karmaUpName, QString::number(currUp), s);
-		dowmres = d->setProperty(karmaDownName, QString::number(currDown), s);
+		downres = d->setProperty(karmaDownName, QString::number(currDown), s);
 	}
 	if( !res || !upres || !downres ) {
 		qWarning() << "Could not (un)setProperty(): " << d->error();
