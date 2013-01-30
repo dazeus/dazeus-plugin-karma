@@ -144,7 +144,12 @@ void KarmaPlugin::newEvent(DaZeus::Event *e) {
 	QList<int> hits;
 	int len = message.length();
 	for(int i = 1; i < (len - 1); ++i) {
-		bool wordEnd = i == len - 2 || message[i+2].isSpace();
+		bool wordEnd = i == len - 2 // End of string
+		    || message[i+2].isSpace() // A space character
+		    || message[i+2] == QLatin1Char(',') // Comma
+		    || message[i+2] == QLatin1Char('.') // Dot
+		    || message[i+2] == QLatin1Char(';') // Semicolon
+		    || message[i+2] == QLatin1Char(':'); // Colon
 		if( message[i] == QLatin1Char('-') && message[i+1] == QLatin1Char('-') && wordEnd ) {
 			hits.append(i);
 		}
