@@ -125,7 +125,7 @@ void KarmaPlugin::newEvent(DaZeus::Event *e) {
 			if(!d->error().isNull()) {
 				qWarning() << "Failed to fetch karma: " << d->error();
 			}
-			res = d->message(network, recv, object + " has neutral karma.");
+			res = d->message(network, recv, object + " has neutral karma (+" + QString::number(currUp) + ", -" + QString::number(currDown) + ").");
 		} else {
 			res = d->message(network, recv, object + " has a karma of " + QString::number(current) + " (+" + QString::number(currUp) + ", -" + QString::number(currDown) + ").");
 		}
