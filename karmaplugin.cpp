@@ -189,9 +189,9 @@ void KarmaPlugin::newEvent(DaZeus::Event *e) {
 			}
 			object = message.mid(startPos, pos - startPos);
 			modifyKarma(network, object, isIncrease, newUp, newDown);
-			qDebug() << origin << (isIncrease ? "increased" : "decreased")
-			         << "karma of" << object << " to " << QString::number(newUp - newDown)
-					 << " (+" << QString::number(newUp) << ", -" << QString::number(newDown) << ").";
+			qDebug() << origin + (isIncrease ? " increased" : " decreased")
+			         + " karma of " + object + " to " + QString::number(newUp - newDown)
+			         + " (+" + QString::number(newUp) + ", -" + QString::number(newDown) + ").";
 			continue;
 		}
 
@@ -216,8 +216,8 @@ void KarmaPlugin::newEvent(DaZeus::Event *e) {
 		object = message.mid(startPos + 1, pos - 2 - startPos);
 		modifyKarma(network, object, isIncrease, newUp, newDown);
 		QString message = origin + (isIncrease ? " increased" : " decreased") + " karma of "
-			         + object + " to " + QString::number(newUp - newDown)
-					 + " (+" + QString::number(newUp) + ", -" + QString::number(newDown) + ").";
+		                + object + " to " + QString::number(newUp - newDown)
+		                + " (+" + QString::number(newUp) + ", -" + QString::number(newDown) + ").";
 		qDebug() << message;
 		if(ender == ']') {
 			// Verbose mode, print the result
