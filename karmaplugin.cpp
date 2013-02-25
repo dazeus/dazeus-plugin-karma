@@ -67,23 +67,23 @@ void KarmaPlugin::modifyKarma(const QString &network, const QString &object, boo
 	QString karmaUpName   = "perl.DazKarma.upkarma_" + object.toLower();
 	QString karmaDownName = "perl.DazKarma.downkarma_" + object.toLower();
 
-	bool success = true;
+	bool success, successUp, successDown;
 	if(current == 0) {
-		success = success && d->unsetProperty(qualifiedName, s);
+		success = d->unsetProperty(qualifiedName, s);
 		if(success) {
 			// Also unset global property, in case one is left behind
-			success = success && d->unsetProperty(qualifiedName, g);
+			success = d->unsetProperty(qualifiedName, g);
 		}
 
 		// Set counters to match with neutral karma
-		success = success && d->setProperty(karmaUpName, QString::number(newUp), s);
-		success = success && d->setProperty(karmaDownName, QString::number(newDown), s);
+		successUp = d->setProperty(karmaUpName, QString::number(newUp), s);
+		successDown = d->setProperty(karmaDownName, QString::number(newDown), s);
 	} else {
-		success = success && d->setProperty(qualifiedName, QString::number(current), s);
-		success = success && d->setProperty(karmaUpName, QString::number(newUp), s);
-		success = success && d->setProperty(karmaDownName, QString::number(newDown), s);
+		success = d->setProperty(qualifiedName, QString::number(current), s);
+		successUp = d->setProperty(karmaUpName, QString::number(newUp), s);
+		successDown = d->setProperty(karmaDownName, QString::number(newDown), s);
 	}
-	if(!success) {
+	if(!(success && successUp && successDown)) {
 		qWarning() << "Could not (un)setProperty(): " << d->error();
 	}
 }
