@@ -48,29 +48,32 @@ void KarmaPlugin::connectionFailed() {
 	QCoreApplication::exit(1);
 }
 
-int KarmaPlugin::modifyKarma(const QString &network, const QString &object, bool increase) {
+void KarmaPlugin::modifyKarma(const QString &network, const QString &object, bool increase, int & newUp, int & newDown) {
 	DaZeus::Scope s(network);
 	DaZeus::Scope g;
+
 	QString qualifiedName = QLatin1String("perl.DazKarma.karma_") + object.toLower();
 	QString karmaUpName   = QLatin1String("perl.DazKarma.upkarma_") + object.toLower();
 	QString karmaDownName = QLatin1String("perl.DazKarma.downkarma_") + object.toLower();
+
 	int current = d->getProperty(qualifiedName, s).toInt();
-	int currUp = d->getProperty(karmaUpName, s).toInt();
-	int currDown = d->getProperty(karmaDownName, s).toInt();
-	if( (current == 0 || currUp == 0 || currDown == 0) && !d->error().isNull()) {
+	newUp = d->getProperty(karmaUpName, s).toInt();
+	newDown = d->getProperty(karmaDownName, s).toInt();
+
+	if((current == 0 || newUp == 0 || newDown == 0) && !d->error().isNull()) {
 		qWarning() << "Could not getProperty(): " << d->error();
 	}
 	
 	// Check for non-consistent karma and adjust counters accordingly
-	if (current < (currUp - currDown)) currDown += -current - (currUp - currDown);
-	if (current > (currUp - currDown)) currUp += current - (currUp - currDown);
+	if(current < (newUp - newDown)) newDown += -current - (newUp - newDown);
+	if(current > (newUp - newDown)) newUp += current - (newUp - newDown);
 
 	if(increase) {
 		++current;
-		++currUp;
+		++newUp;
 	} else {
 		--current;
-		++currDown;
+		++newDown;
 	}
 
 	bool res, upres, downres;
@@ -80,18 +83,28 @@ int KarmaPlugin::modifyKarma(const QString &network, const QString &object, bool
 		if(res) res = d->unsetProperty(qualifiedName, g);
 
 		// Set counters to match with neutral karma
-		upres = d->setProperty(karmaUpName, QString::number(currUp), s);
-		downres = d->setProperty(karmaDownName, QString::number(currDown), s);
+		upres = d->setProperty(karmaUpName, QString::number(newUp), s);
+		downres = d->setProperty(karmaDownName, QString::number(newDown), s);
 	} else {
 		res = d->setProperty(qualifiedName, QString::number(current), s);
-		upres = d->setProperty(karmaUpName, QString::number(currUp), s);
-		downres = d->setProperty(karmaDownName, QString::number(currDown), s);
+		upres = d->setProperty(karmaUpName, QString::number(newUp), s);
+		downres = d->setProperty(karmaDownName, QString::number(newDown), s);
 	}
-	if( !res || !upres || !downres ) {
+	if(!res || !upres || !downres) {
 		qWarning() << "Could not (un)setProperty(): " << d->error();
 	}
+}
 
-	return current;
+void KarmaPlugin::getKarma(const QString &network, const QString &object, int & currUp, int & currDown) {
+	DaZeus::Scope s(network);
+
+	int current = d->getProperty("perl.DazKarma.karma_" + object.toLower(), s).toInt();
+	currUp = d->getProperty("perl.DazKarma.upkarma_" + object.toLower(), s).toInt();
+	currDown = d->getProperty("perl.DazKarma.downkarma_" + object.toLower(), s).toInt();
+
+	// Check for non-consistent karma and adjust counters accordingly
+	if (current < (currUp - currDown)) currDown += -current - (currUp - currDown);
+	if (current > (currUp - currDown)) currUp += current - (currUp - currDown);
 }
 
 void KarmaPlugin::newEvent(DaZeus::Event *e) {
@@ -104,7 +117,6 @@ void KarmaPlugin::newEvent(DaZeus::Event *e) {
 	QString origin  = e->parameters[1];
 	QString recv    = e->parameters[2];
 	QString message = e->parameters[3];
-	DaZeus::Scope s(network);
 	// TODO: use getNick()
 	if(!recv.startsWith('#')) {
 		// reply to PM
@@ -112,22 +124,17 @@ void KarmaPlugin::newEvent(DaZeus::Event *e) {
 	}
 	if(message.startsWith("}karma ")) {
 		QString object = message.mid(7).trimmed();
-		int current = d->getProperty("perl.DazKarma.karma_" + object.toLower(), s).toInt();
-		int currUp = d->getProperty("perl.DazKarma.upkarma_" + object.toLower(), s).toInt();
-		int currDown = d->getProperty("perl.DazKarma.downkarma_" + object.toLower(), s).toInt();
-
-		// Check for non-consistent karma and adjust counters accordingly
-		if (current < (currUp - currDown)) currDown += -current - (currUp - currDown);
-		if (current > (currUp - currDown)) currUp += current - (currUp - currDown);
+		int currUp, currDown;
+		getKarma(network, object, currUp, currDown);
 
 		bool res;
-		if(current == 0) {
+		if((currUp - currDown) == 0) {
 			if(!d->error().isNull()) {
 				qWarning() << "Failed to fetch karma: " << d->error();
 			}
 			res = d->message(network, recv, object + " has neutral karma (+" + QString::number(currUp) + ", -" + QString::number(currDown) + ").");
 		} else {
-			res = d->message(network, recv, object + " has a karma of " + QString::number(current) + " (+" + QString::number(currUp) + ", -" + QString::number(currDown) + ").");
+			res = d->message(network, recv, object + " has a karma of " + QString::number(currUp - currDown) + " (+" + QString::number(currUp) + ", -" + QString::number(currDown) + ").");
 		}
 		if(!res) {
 			qWarning() << "Failed to send message: " << d->error();
@@ -163,7 +170,7 @@ void KarmaPlugin::newEvent(DaZeus::Event *e) {
 		int pos = i.next();
 		bool isIncrease = message[pos] == QLatin1Char('+');
 		QString object;
-		int newVal;
+		int newUp, newDown;
 
 		if(message[pos-1].isLetter()) {
 			// only alphanumerics between startPos and pos-1
@@ -184,9 +191,10 @@ void KarmaPlugin::newEvent(DaZeus::Event *e) {
 				continue;
 			}
 			object = message.mid(startPos, pos - startPos);
-			newVal = modifyKarma(network, object, isIncrease);
+			modifyKarma(network, object, isIncrease, newUp, newDown);
 			qDebug() << origin << (isIncrease ? "increased" : "decreased")
-			         << "karma of" << object << "to" << QString::number(newVal);
+			         << "karma of" << object << " to " << QString::number(newUp - newDown)
+					 << " (+" << QString::number(newUp) << ", -" << QString::number(newDown) << ").";
 			continue;
 		}
 
@@ -209,10 +217,10 @@ void KarmaPlugin::newEvent(DaZeus::Event *e) {
 			continue;
 
 		object = message.mid(startPos + 1, pos - 2 - startPos);
-		newVal = modifyKarma(network, object, isIncrease);
-		QString message = origin + QLatin1String(isIncrease ? " increased" : " decreased")
-		                + QLatin1String(" karma of ") + object + QLatin1String(" to ")
-		                + QString::number(newVal) + QLatin1Char('.');
+		modifyKarma(network, object, isIncrease, newUp, newDown);
+		QString message = origin + (isIncrease ? " increased" : " decreased") + " karma of "
+			         + object + " to " + QString::number(newUp - newDown)
+					 + " (+" + QString::number(newUp) + ", -" + QString::number(newDown) + ").";
 		qDebug() << message;
 		if(ender == ']') {
 			// Verbose mode, print the result

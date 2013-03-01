@@ -22,7 +22,8 @@ class KarmaPlugin : public QObject
     void connectionFailed();
 
   private:
-    int modifyKarma(const QString &network, const QString &object, bool increase);
+    void modifyKarma(const QString &network, const QString &object, bool increase, int & newUp, int & newDown);
+    void getKarma(const QString &network, const QString &object, int & currUp, int & currDown);
     DaZeus *d;
 };
 
