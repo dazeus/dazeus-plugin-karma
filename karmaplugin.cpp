@@ -3,11 +3,19 @@
  * See LICENSE for license.
  */
 
+#include <iostream>
+#include <string>
 #include <QtCore/QList>
 #include <QtCore/QDebug>
 #include <QtCore/QCoreApplication>
 
 #include "karmaplugin.h"
+
+std::ostream &operator<<(std::ostream &in, const QString &s) {
+	std::string stds = s.toStdString();
+	in << stds.c_str();
+	return in;
+}
 
 int main(int argc, char *argv[]) {
 	if(argc < 2) {
@@ -189,9 +197,9 @@ void KarmaPlugin::newEvent(DaZeus::Event *e) {
 			}
 			object = message.mid(startPos, pos - startPos);
 			modifyKarma(network, object, isIncrease, newUp, newDown);
-			qDebug() << origin << (isIncrease ? "increased" : "decreased")
-			         << "karma of" << object << " to " << QString::number(newUp - newDown)
-					 << " (+" << QString::number(newUp) << ", -" << QString::number(newDown) << ").";
+			std::cout << origin << (isIncrease ? "increased" : "decreased")
+			         << "karma of" << object << " to " << newUp - newDown
+					 << " (+" << newUp << ", -" << newDown << ")." << std::endl;
 			continue;
 		}
 
@@ -218,7 +226,7 @@ void KarmaPlugin::newEvent(DaZeus::Event *e) {
 		QString message = origin + (isIncrease ? " increased" : " decreased") + " karma of "
 			         + object + " to " + QString::number(newUp - newDown)
 					 + " (+" + QString::number(newUp) + ", -" + QString::number(newDown) + ").";
-		qDebug() << message;
+		std::cout << message << std::endl;
 		if(ender == ']') {
 			// Verbose mode, print the result
 			if(!d->message(network, recv, message)) {
