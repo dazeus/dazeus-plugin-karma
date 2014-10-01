@@ -62,7 +62,7 @@ module.exports = (function() {
         peg$c27 = "--",
         peg$c28 = { type: "literal", value: "--", description: "\"--\"" },
         peg$c29 = function() { return -1; },
-        peg$c30 = function() { return input.length === offset() || /\s/.test(input.charAt(offset())); },
+        peg$c30 = function() { return input.length === offset() || /[\s,.;:)]/.test(input.charAt(offset())); },
         peg$c31 = void 0,
 
         peg$currPos          = 0,

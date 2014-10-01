@@ -36,4 +36,4 @@ modifier
   / "--" at_boundary { return -1; }
 
 at_boundary
-  = & { return input.length === offset() || /\s/.test(input.charAt(offset())); }
+  = & { return input.length === offset() || /[\s,.;:)]/.test(input.charAt(offset())); }
