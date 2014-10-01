@@ -23,14 +23,17 @@ implicit_karma_change
   = c:implicit_chars m:modifier { return [c, m, 'implicit']; }
 
 implicit_chars
-  = cs:([^ \n\r\t\v\f+-]+) { return cs.join(''); }
+  = cs:([a-zA-Z0-9_-]+) { return cs.join(''); }
 
 notice_chars
-  = cs:([^\]]*) { return cs.join(''); }
+  = cs:([^\][]*) { return cs.join(''); }
 
 silent_chars
-  = cs:([^\)]*) { return cs.join(''); }
+  = cs:([^\)\(]*) { return cs.join(''); }
 
 modifier
-  = "++" { return 1; }
-  / "--" { return -1; }
+  = "++" at_boundary { return 1; }
+  / "--" at_boundary { return -1; }
+
+at_boundary
+  = & { return input.length === offset() || /\s/.test(input.charAt(offset())); }
