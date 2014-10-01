@@ -1,6 +1,6 @@
 var parser = require('./grammar');
 
-export default class Karma {
+export class Karma {
   constructor(client) {
     this.client = client;
     this.client.on('PRIVMSG', (network, user, channel, message) => {
