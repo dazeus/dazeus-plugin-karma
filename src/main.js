@@ -9,5 +9,4 @@ var options = dazeus_util.optionsFromArgv(argv);
 
 var client = dazeus.connect(options, () => {
   new Karma(client);
-
 });
