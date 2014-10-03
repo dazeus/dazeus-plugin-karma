@@ -14,13 +14,13 @@ explicit_karma_change
   / karma_silent_change
 
 karma_notice_change
-  = "[" c:notice_chars "]" m:modifier { return [c, m, 'notify']; }
+  = "[" c:notice_chars "]" m:modifier { return {term: c, change: m, type: 'notify'}; }
 
 karma_silent_change
-  = "(" c:silent_chars ")" m:modifier { return [c, m, 'silent']; }
+  = "(" c:silent_chars ")" m:modifier { return {term: c, change: m, type: 'silent'}; }
 
 implicit_karma_change
-  = c:implicit_chars m:modifier { return [c, m, 'implicit']; }
+  = c:implicit_chars m:modifier { return {term: c, change: m, type: 'implicit'}; }
 
 implicit_chars
   = cs:(implicit_char+) { return cs.join(''); }
