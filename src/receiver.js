@@ -1,4 +1,4 @@
-import {format_karma, each_sequential} from './util';
+import {format_karma, each_sequential, normalize_term} from './util';
 var parser = require('./grammar');
 
 export class Receiver {
@@ -7,7 +7,7 @@ export class Receiver {
     this.store = store;
     this.client.on('PRIVMSG', (network, user, channel, message) => {
       var reply = (message, highlight = false) => {
-        this.client.reply(network, user, channel, message, highlight);
+        this.client.reply(network, channel, user, message, highlight);
       };
 
       this.messageCanChangeKarma(message, () => {
@@ -22,21 +22,35 @@ export class Receiver {
   checkMessage(network, user, message, reply) {
     var changes;
     try {
-      changes = parser.parse(message);
+      changes = this.cleanChanges(parser.parse(message));
     } catch (err) {
       console.log(`Parse error while processing: "${message}"`);
     }
 
-    each_sequential(changes, this.updateKarma.bind(this, network, user));
+    each_sequential(changes, this.updateKarma.bind(this, network, user, reply));
+  }
+
+  /**
+   * Remove trailing whitespace and remove karma changes for empty strings.
+   */
+  cleanChanges(changes) {
+    var relevant = [];
+    for (var change of changes) {
+      change.term = change.term.trim();
+      if (change.term.length > 0) {
+        relevant.push(change);
+      }
+    }
+    return relevant;
   }
 
   /**
    * Update the karma for the given term, the karma change was introduced by user on network.
    */
-  updateKarma(network, user, karma, callback) {
+  updateKarma(network, user, reply, karma, callback) {
     var change, by, notify;
 
-    notify = (result) => {
+    notify = (change, by, result) => {
       if (karma.type === 'notify') {
         result = format_karma(result);
         reply(`${user} ${change} karma of ${karma.term} to ${result}`);
@@ -45,13 +59,25 @@ export class Receiver {
     };
 
     if (karma.change.up) {
-      this.store.addKarma(network, user, karma.term, karma.change.up, notify);
       change = 'increased';
       by = karma.change.up;
+      this.store.addKarma(
+        network,
+        user,
+        karma.term,
+        karma.change.up,
+        notify.bind(this, change, by)
+      );
     } else {
-      this.store.removeKarma(network, user, karma.term, karma.change.down, notify);
       change = 'decreased';
       by = karma.change.down;
+      this.store.removeKarma(
+        network,
+        user,
+        karma.term,
+        karma.change.up,
+        notify.bind(this, change, by)
+      );
     }
   }
 

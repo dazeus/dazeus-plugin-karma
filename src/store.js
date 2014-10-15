@@ -14,6 +14,6 @@ export class Store {
   }
 
   getKarma(network, term, callback) {
-    
+
   }
 }
