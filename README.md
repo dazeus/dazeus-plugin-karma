@@ -9,3 +9,6 @@ npm.
 ## Usage
 You can run the plugin using `node index`. Take a look at all the options available using
 `node index --help`.
+
+You can run the migration script to transform data from the old dazeus-plugin-karma to this new one
+by running `bin/migrate --network [network]` (note that you have to migrate per network).

@@ -1,3 +1,5 @@
+var _ = require('lodash');
+
 export function each_sequential(list, f, end = null) {
   var current = 0;
   var next = function (contin = true) {
@@ -11,6 +13,20 @@ export function each_sequential(list, f, end = null) {
     }
   };
   next();
+};
+
+export function each_parallel(list, f, end) {
+  var finished = 0;
+  var count = list.length;
+  var next = function () {
+    finished += 1;
+    if (count === finished) {
+      end();
+    }
+  };
+  _.each(list, (value) => {
+    f(value, next);
+  });
 };
 
 export function format_karma(karma) {
