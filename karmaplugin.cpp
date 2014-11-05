@@ -197,8 +197,8 @@ void KarmaPlugin::newEvent(DaZeus::Event *e) {
 			}
 			object = message.mid(startPos, pos - startPos);
 			modifyKarma(network, object, isIncrease, newUp, newDown);
-			std::cout << origin << (isIncrease ? "increased" : "decreased")
-			         << "karma of" << object << " to " << newUp - newDown
+			std::cout << origin << (isIncrease ? " increased" : " decreased")
+			         << " karma of " << object << " to " << newUp - newDown
 					 << " (+" << newUp << ", -" << newDown << ")." << std::endl;
 			continue;
 		}
