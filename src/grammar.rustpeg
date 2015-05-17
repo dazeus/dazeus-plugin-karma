@@ -1,0 +1,57 @@
+use karma::{Karma, KarmaChange, KarmaStyle};
+
+#[export]
+line -> Vec<Karma>
+  = es:(element*) {
+    es.iter().filter_map(|&ref x| if let &Some(ref k) = x { Some(k.clone()) } else { None }).collect()
+  }
+
+element -> Option<Karma>
+  = k:karmachange { Some(k) }
+  / . { None }
+
+karmachange -> Karma
+  = explicit_karma_change
+  / implicit_karma_change
+
+explicit_karma_change -> Karma
+  = karma_notice_change
+  / karma_silent_change
+
+karma_notice_change -> Karma
+  = "[" c:notice_chars "]" m:modifier { Karma {term: c, change: m, style: KarmaStyle::Notify} }
+
+karma_silent_change -> Karma
+  = "(" c:silent_chars ")" m:modifier { Karma {term: c, change: m, style: KarmaStyle::Silent} }
+
+implicit_karma_change -> Karma
+  = c:implicit_chars m:modifier { Karma {term: c, change: m, style: KarmaStyle::Implicit} }
+
+implicit_chars -> String
+  = cs:(implicit_char+) { match_str.to_string() }
+
+implicit_char -> String
+  = implicit_char_rest
+  / cs:('-' implicit_char_rest implicit_chars) { match_str.to_string() }
+
+implicit_char_rest -> String
+  = [a-zA-Z0-9_] { match_str.to_string() }
+
+notice_chars -> String
+  = cs:([^\][]*) { match_str.to_string() }
+
+silent_chars -> String
+  = cs:([^\)\(]*) { match_str.to_string() }
+
+modifier -> KarmaChange
+  = "++" at_boundary { KarmaChange {up: 1, down: 0} }
+  / "--" at_boundary { KarmaChange {up: 0, down: 1} }
+
+at_boundary
+  = &whitespace / &[,.;:)] / !.
+
+whitespace
+  = [ \t\n\r\v\f\u0085] / adv_whitespace
+
+adv_whitespace
+  = [\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000]
