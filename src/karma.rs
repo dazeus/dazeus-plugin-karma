@@ -94,8 +94,18 @@ impl KarmaValue {
             let first_vote_str = get_key!(obj, "first_vote", is_string, as_string);
             let last_vote_str = get_key!(obj, "last_vote", is_string, as_string);
             let votes = get_key!(obj, "votes", is_object, as_object);
-            let upvotes = get_key!(votes, "up", is_u64, as_u64);
-            let downvotes = get_key!(votes, "down", is_u64, as_u64);
+
+            let upvotes = match votes.get("up") {
+                Some(m) if m.is_u64() => m.as_u64().unwrap(),
+                Some(m) if m.is_string() && m.as_string().unwrap().parse::<u64>().is_ok() => m.as_string().unwrap().parse().unwrap(),
+                _ => return Err(From::from(KarmaError::new("No value or invalid value for key 'up'")))
+            };
+
+            let downvotes = match votes.get("down") {
+                Some(m) if m.is_u64() => m.as_u64().unwrap(),
+                Some(m) if m.is_string() && m.as_string().unwrap().parse::<u64>().is_ok() => m.as_string().unwrap().parse().unwrap(),
+                _ => return Err(From::from(KarmaError::new("No value or invalid value for key 'down'")))
+            };
 
             let first_vote = try!(first_vote_str.parse::<DateTime<Local>>());
             let last_vote = try!(last_vote_str.parse::<DateTime<Local>>());
