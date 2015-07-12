@@ -2,6 +2,7 @@ use rustc_serialize::json;
 use error::KarmaError;
 use chrono::{DateTime, Local};
 use dazeus::{DaZeusClient, Scope, Response};
+use std::ascii::AsciiExt;
 
 pub const STORE_PREFIX: &'static str = "dazeus_karma.";
 
@@ -56,6 +57,7 @@ pub struct Karma {
 #[derive(Debug, Clone, PartialEq)]
 pub struct KarmaValue {
     pub term: String,
+    pub original_term: String,
     pub votes: KarmaChange,
     pub last_vote: DateTime<Local>,
     pub first_vote: DateTime<Local>
@@ -64,7 +66,8 @@ pub struct KarmaValue {
 impl KarmaValue {
     pub fn new(term: &str) -> KarmaValue {
         KarmaValue {
-            term: term.to_string(),
+            term: term.to_ascii_lowercase(),
+            original_term: term.to_string(),
             votes: KarmaChange::new(0, 0),
             last_vote: Local::now(),
             first_vote: Local::now()
@@ -98,7 +101,8 @@ impl KarmaValue {
             let last_vote = try!(last_vote_str.parse::<DateTime<Local>>());
 
             Ok(KarmaValue {
-                term: term.to_string(),
+                term: term.to_ascii_lowercase(),
+                original_term: term.to_string(),
                 votes: KarmaChange::new(upvotes, downvotes),
                 last_vote: last_vote,
                 first_vote: first_vote
@@ -110,7 +114,14 @@ impl KarmaValue {
 
     pub fn from_str(s: &str) -> Result<KarmaValue, Box<::std::error::Error>> {
         let data = try!(json::Json::from_str(s));
-        KarmaValue::from_json(data)
+        let karma = KarmaValue::from_json(data);
+        match karma {
+            Ok(mut k) => {
+                k.original_term = k.term.clone();
+                Ok(k)
+            },
+            o => o
+        }
     }
 
     pub fn from_response(r: &Response) -> Result<KarmaValue, Box<::std::error::Error>> {
@@ -120,15 +131,19 @@ impl KarmaValue {
         }
     }
 
-    pub fn from_dazeus(dazeus: &DaZeusClient, term: &str) -> Result<KarmaValue, Box<::std::error::Error>> {
+    pub fn from_dazeus(dazeus: &DaZeusClient, scope: Scope, term: &str) -> Result<KarmaValue, Box<::std::error::Error>> {
         let property = format!("{}{}", STORE_PREFIX, term);
-        KarmaValue::from_response(&dazeus.get_property(&property[..], Scope::any()))
+        let mut karma = KarmaValue::from_response(&dazeus.get_property(&property[..].to_ascii_lowercase(), scope));
+        if let Ok(ref mut k) = karma {
+            k.original_term = term.to_string();
+        }
+        karma
     }
 
     pub fn to_string(&self) -> String {
         match self.votes.total() {
-            0 => format!("{} has neutral karma (+{}, -{})", self.term, self.votes.up, self.votes.down),
-            _ => format!("{} has a karma of {}", self.term, self.votes.to_string()),
+            0 => format!("{} has neutral karma (+{}, -{})", self.original_term, self.votes.up, self.votes.down),
+            _ => format!("{} has a karma of {}", self.original_term, self.votes.to_string()),
         }
     }
 }
