@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use DaZeus;
 
-my ($socket, $network) = @_;
+my ($socket, $network) = @ARGV;
 
 if (!$socket or !$network) {
 	warn "Usage: $0 socket network\n";
