@@ -142,8 +142,9 @@ impl KarmaValue {
     }
 
     pub fn from_dazeus(dazeus: &DaZeusClient, scope: Scope, term: &str) -> Result<KarmaValue, Box<::std::error::Error>> {
-        let property = format!("{}{}", STORE_PREFIX, term);
-        let mut karma = KarmaValue::from_response(&dazeus.get_property(&property[..].to_ascii_lowercase(), scope));
+        let property = format!("{}{}", STORE_PREFIX, term.to_ascii_lowercase());
+
+        let mut karma = KarmaValue::from_response(&dazeus.get_property(&property[..], scope));
         if let Ok(ref mut k) = karma {
             k.original_term = term.to_string();
         }
