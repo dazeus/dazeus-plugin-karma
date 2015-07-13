@@ -3,7 +3,7 @@ name = "dazeus-plugin-karma"
 version = "0.1.0"
 dependencies = [
  "chrono 0.2.15 (registry+https://github.com/rust-lang/crates.io-index)",
- "dazeus 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dazeus 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "docopt 0.6.67 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -29,7 +29,7 @@ dependencies = [
 
 [[package]]
 name = "dazeus"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "log 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
