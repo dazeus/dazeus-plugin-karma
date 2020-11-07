@@ -2,21 +2,20 @@
 name = "dazeus-plugin-karma"
 version = "0.1.0"
 authors = ["Ruben Nijveld <ruben@gewooniets.nl>"]
+edition = "2018"
 
-[dependencies.dazeus]
-version = "0.4"
-
-[dependencies.docopt]
-version = "0.6"
+[dependencies]
+chrono = "0.4.19"
+dazeus = "0.4"
+docopt = "1.1.0"
+env_logger = "0.8.1"
+log = "0.4.11"
+nom = "6.0.0"
+serde = { version = "1.0.117", features = ["derive"] }
+serde_json = "1.0.59"
 
 [dependencies.rustc-serialize]
 version = "0.3"
 
-[dependencies.log]
-version = "0.3"
-
-[dependencies.env_logger]
-version = "0.3"
-
-[dependencies.chrono]
-version = "0.2"
+[profile.release]
+overflow-checks = true

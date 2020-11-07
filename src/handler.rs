@@ -1,16 +1,17 @@
 use dazeus::{DaZeusClient, Event, Scope};
-use super::grammar::line;
-use super::karma::{Karma, KarmaStyle, KarmaValue};
+use crate::parse::line;
+use crate::karma::{self, Karma, KarmaStyle, KarmaValue};
 use std::error::Error;
 use rustc_serialize::json::ToJson;
-use std::ascii::AsciiExt;
 
-pub fn handle_karma_events(evt: &Event, dazeus: &DaZeusClient) {
-    match line(&evt[3]) {
-        Ok(changes) => {
+pub fn handle_karma_events(evt: &Event, dazeus: &dyn DaZeusClient) {
+    let scope = Scope::network(&evt[0]);
+    let parse = line(&evt[3]);
+    match parse {
+        Ok((_, changes)) => {
             let totals = get_change_totals(changes);
             for change in totals {
-                let value = store_karma_change(&change, Scope::network(&evt[0]), dazeus).unwrap();
+                let value = store_karma_change(&change, scope.clone(), dazeus).unwrap();
                 if change.style == KarmaStyle::Notify {
                     let updown = if change.change.total() < 0 { "decreased" } else { "increased" };
                     dazeus.reply(&evt, &format!("{} {} the karma of {} to {}", &evt[1], updown, change.term, value.votes.to_string())[..], false);
@@ -21,20 +22,26 @@ pub fn handle_karma_events(evt: &Event, dazeus: &DaZeusClient) {
     }
 }
 
-pub fn reply_to_karma_command(evt: &Event, dazeus: &DaZeusClient) {
+pub fn reply_to_karma_command(evt: &Event, dazeus: &dyn DaZeusClient) {
+    let scope = Scope::network(&evt[0]);
     let term = &evt[4].trim();
     if term != &"" {
         let karma = match KarmaValue::from_dazeus(dazeus, Scope::network(&evt[0]), term) {
             Ok(karma) => karma,
             _ => KarmaValue::new(term),
         };
-        dazeus.reply(&evt, &karma.to_string()[..], false);
+        match karma.to_string(dazeus, scope) {
+            Ok(reply) => {
+                dazeus.reply(&evt, &reply[..], false);
+            },
+            Err(err) => error!("Error counting the karma for '{}': {}", term, err),
+        }
     } else {
         dazeus.reply(&evt, "What do you want to know the karma of?", true);
     }
 }
 
-pub fn reply_to_karmafight_command(evt: &Event, dazeus: &DaZeusClient) {
+pub fn reply_to_karmafight_command(evt: &Event, dazeus: &dyn DaZeusClient) {
     if evt.len() > 5 {
         let karmas = retrieve_all_karmas(evt, dazeus);
         if karmas.len() == 1 {
@@ -46,7 +53,7 @@ pub fn reply_to_karmafight_command(evt: &Event, dazeus: &DaZeusClient) {
                 let first = highest.first().unwrap();
                 dazeus.reply(&evt, &format!("{} wins with {}", first.original_term, first.votes.to_string())[..], false);
             } else {
-                let terms = highest.iter().map(|e| e.original_term.clone() ).collect::<Vec<String>>().connect(", ");
+                let terms = highest.iter().map(|e| e.original_term.clone()).collect::<Vec<String>>().join(", ");
                 let karma = highest.first().unwrap().votes.total();
                 dazeus.reply(&evt, &format!("{} all have the same karma: {}", terms, karma)[..], false);
             }
@@ -54,6 +61,24 @@ pub fn reply_to_karmafight_command(evt: &Event, dazeus: &DaZeusClient) {
     } else {
         dazeus.reply(&evt, "What should the fight be between?", true);
     }
+}
+
+pub fn reply_to_karmamerge_command(evt: &Event, _dazeus: &dyn DaZeusClient) {
+    let _scope = Scope::network(&evt[0]);
+    todo!()
+}
+
+pub fn reply_to_karmasplit_command(evt: &Event, _dazeus: &dyn DaZeusClient) {
+    let _scope = Scope::network(&evt[0]);
+    todo!()
+}
+
+pub fn reply_with_redirect(to: &'static str, evt: &Event, dazeus: &dyn DaZeusClient) {
+    let msg = match dazeus.get_highlight_char() {
+        Some(highlight_char) => format!("Use '{}{}'", highlight_char, to),
+        None => format!("Use '{}' command", to),
+    };
+    dazeus.reply(&evt, &msg, true);
 }
 
 fn get_change_totals(changes: Vec<Karma>) -> Vec<Karma> {
@@ -83,11 +108,11 @@ fn get_change_totals(changes: Vec<Karma>) -> Vec<Karma> {
         .collect()
 }
 
-fn store_karma_change(change: &Karma, scope: Scope, dazeus: &DaZeusClient) -> Result<KarmaValue, Box<Error>> {
-    let property = format!("{}{}", ::karma::STORE_PREFIX, &change.term[..]);
+fn store_karma_change(change: &Karma, scope: Scope, dazeus: &dyn DaZeusClient) -> Result<KarmaValue, Box<dyn Error>> {
+    let property = format!("{}{}", karma::STORE_PREFIX, &change.term[..]);
     let current = dazeus.get_property(&property[..].to_ascii_lowercase(), scope.clone());
     let mut karma = match current.get_str("value") {
-        Some(s) => try!(KarmaValue::from_str(s)),
+        Some(s) => KarmaValue::from_str(s)?,
         None => KarmaValue::new(&change.term[..]),
     };
     karma.vote(change);
@@ -110,7 +135,7 @@ fn find_highest_karma(karmas: Vec<KarmaValue>) -> Vec<KarmaValue> {
     highest
 }
 
-fn retrieve_all_karmas(evt: &Event, dazeus: &DaZeusClient) -> Vec<KarmaValue> {
+fn retrieve_all_karmas(evt: &Event, dazeus: &dyn DaZeusClient) -> Vec<KarmaValue> {
     let mut karmas = Vec::new();
     for key in 5..evt.len() {
         if !karmas.iter().any(|e: &KarmaValue| e.term == &evt[key]) {

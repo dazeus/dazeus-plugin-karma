@@ -5,15 +5,16 @@ extern crate dazeus;
 extern crate docopt;
 extern crate rustc_serialize;
 extern crate chrono;
+extern crate nom;
 
 use docopt::Docopt;
 use dazeus::{DaZeus, DaZeusClient, EventType, Connection};
 use handler::*;
 
-mod karma;
-mod grammar;
-mod handler;
 mod error;
+mod handler;
+mod karma;
+mod parse;
 
 // Write the Docopt usage string.
 static USAGE: &'static str = "
@@ -30,7 +31,7 @@ Options:
 ";
 
 fn main() {
-    env_logger::init().unwrap();
+    env_logger::init();
 
     let args = Docopt::new(USAGE).and_then(|d| d.parse()).unwrap_or_else(|e| e.exit());
     let socket = args.get_str("--socket");
@@ -63,5 +64,25 @@ fn main() {
         reply_to_karmafight_command(&evt, dazeus);
     });
 
-    dazeus.listen().unwrap();
+    dazeus.subscribe_command("karma-fight", |evt, dazeus| {
+        reply_with_redirect("karmafight", &evt, dazeus);
+    });
+
+    dazeus.subscribe_command("karmamerge", |evt, dazeus| {
+        reply_to_karmamerge_command(&evt, dazeus);
+    });
+
+    dazeus.subscribe_command("karma-merge", |evt, dazeus| {
+        reply_with_redirect("karmamerge", &evt, dazeus);
+    });
+
+    dazeus.subscribe_command("karmasplit", |evt, dazeus| {
+        reply_to_karmasplit_command(&evt, dazeus);
+    });
+
+    dazeus.subscribe_command("karma-split", |evt, dazeus| {
+        reply_with_redirect("karmasplit", &evt, dazeus);
+    });
+
+    dazeus.listen().expect("dazeus error");
 }
