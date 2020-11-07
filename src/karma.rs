@@ -4,7 +4,7 @@ use chrono::{DateTime, Local};
 use dazeus::{DaZeusClient, Scope, Response};
 use serde::{Deserialize, Serialize};
 
-pub const STORE_PREFIX: &'static str = "dazeus_karma.";
+pub const STORE_PREFIX: &str = "dazeus_karma.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
 pub struct KarmaChange {
@@ -130,10 +130,10 @@ impl KarmaValue {
 
             Ok(KarmaValue {
                 term: term.to_ascii_lowercase(),
-                original_term: term.to_string(),
+                original_term: term.to_owned(),
                 votes: KarmaChange::new(upvotes, downvotes),
-                last_vote: last_vote,
-                first_vote: first_vote,
+                last_vote,
+                first_vote,
                 aliased_with
             })
         } else {
@@ -165,7 +165,7 @@ impl KarmaValue {
 
         let mut karma = KarmaValue::from_response(&dazeus.get_property(&property[..], scope));
         if let Ok(ref mut k) = karma {
-            k.original_term = term.to_string();
+            k.original_term = term.to_owned();
         }
         karma
     }
@@ -179,7 +179,7 @@ impl KarmaValue {
     }
 
     pub fn get_total_votes_with_aliased(&self, dazeus: &dyn DaZeusClient, scope: Scope) -> Result<KarmaChange, Box<dyn std::error::Error>> {
-        let mut votes = self.votes.clone();
+        let mut votes = self.votes;
         for aliased in self.get_aliased_from_dazeus(dazeus, scope)? {
             votes.up += aliased.votes.up;
             votes.down += aliased.votes.down;

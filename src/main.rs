@@ -17,7 +17,7 @@ mod karma;
 mod parse;
 
 // Write the Docopt usage string.
-static USAGE: &'static str = "
+static USAGE: &str = "
 The DaZeus karma plugin.
 
 Usage:
@@ -42,8 +42,8 @@ fn main() {
     dazeus.handshake("dazeus-karma", "1", None);
 
     dazeus.subscribe(EventType::PrivMsg, |evt, dazeus| {
-        let highlight_char = dazeus.get_highlight_char().unwrap_or("}".to_string());
-        let nick = dazeus.nick(&evt[0]).unwrap_or("DaZeus".to_string());
+        let highlight_char = dazeus.get_highlight_char().unwrap_or_else(|| "}".to_string());
+        let nick = dazeus.nick(&evt[0]).unwrap_or_else(|| "DaZeus".to_string());
 
         let hl_with_char = format!("{}karma", highlight_char);
         let hl_with_nick = format!("{}:", nick);

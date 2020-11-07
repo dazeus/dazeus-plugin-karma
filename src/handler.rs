@@ -116,14 +116,14 @@ fn store_karma_change(change: &Karma, scope: Scope, dazeus: &dyn DaZeusClient) -
         None => KarmaValue::new(&change.term[..]),
     };
     karma.vote(change);
-    dazeus.set_property(&property[..].to_ascii_lowercase(), &karma.to_json().to_string()[..], scope.clone());
+    dazeus.set_property(&property[..].to_ascii_lowercase(), &karma.to_json().to_string()[..], scope);
     Ok(karma)
 }
 
 fn find_highest_karma(karmas: Vec<KarmaValue>) -> Vec<KarmaValue> {
     let mut highest: Vec<KarmaValue> = Vec::new();
     for item in karmas {
-        if highest.len() == 0 || highest.first().unwrap().votes.total() == item.votes.total() {
+        if highest.is_empty() || highest.first().unwrap().votes.total() == item.votes.total() {
             highest.push(item);
         } else if item.votes.total() > highest.first().unwrap().votes.total() {
             highest.clear();
@@ -138,7 +138,7 @@ fn find_highest_karma(karmas: Vec<KarmaValue>) -> Vec<KarmaValue> {
 fn retrieve_all_karmas(evt: &Event, dazeus: &dyn DaZeusClient) -> Vec<KarmaValue> {
     let mut karmas = Vec::new();
     for key in 5..evt.len() {
-        if !karmas.iter().any(|e: &KarmaValue| e.term == &evt[key]) {
+        if !karmas.iter().any(|e: &KarmaValue| e.term == evt[key]) {
             karmas.push(match KarmaValue::from_dazeus(dazeus, Scope::network(&evt[0]), &evt[key]) {
                 Ok(karma) => karma,
                 _ => KarmaValue::new(&evt[key])

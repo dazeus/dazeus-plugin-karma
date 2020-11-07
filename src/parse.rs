@@ -20,7 +20,7 @@ pub fn line(input: &str) -> IResult<&str, Vec<Karma>> {
 }
 
 fn element(input: &str) -> IResult<&str, Option<Karma>> {
-    let karma = map(karma_change, |p| Some(p));
+    let karma = map(karma_change, Some);
     let anychar = value(None, anychar);
     alt((karma, anychar))(input)
 }
@@ -69,7 +69,7 @@ fn implicit_karma_change(input: &str) -> IResult<&str, Karma> {
     Ok((
         input,
         Karma {
-            term: term.to_owned(),
+            term,
             change,
             style: KarmaStyle::Notify,
         },
@@ -95,17 +95,11 @@ fn is_implicit_char(c: char) -> bool {
 }
 
 fn is_notice_char(c: char) -> bool {
-    match c {
-        '[' | ']' => true,
-        _ => false,
-    }
+    matches!(c, '[' | ']')
 }
 
 fn is_silent_char(c: char) -> bool {
-    match c {
-        '(' | ')' => true,
-        _ => false,
-    }
+    matches!(c, '(' | ')')
 }
 
 fn modifier(input: &str) -> IResult<&str, KarmaChange> {
