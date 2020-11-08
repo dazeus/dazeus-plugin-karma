@@ -82,15 +82,8 @@ pub struct Karma {
 }
 
 impl std::fmt::Display for Karma {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self.votes.total() {
-            0 => write!(
-                f,
-                "{} has neutral karma (+{}, -{})",
-                self.original_term, self.votes.up, self.votes.down
-            ),
-            _ => write!(f, "{} has a karma of {}", self.original_term, self.votes),
-        }
+    fn fmt(&self, w: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(w, "{}", self.term)
     }
 }
 
@@ -167,20 +160,8 @@ pub struct KarmaGroup {
 
 impl std::fmt::Display for KarmaGroup {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let votes = self.votes();
         let is_group_marker = if self.karmas.len() > 1 { " (+)" } else { "" };
-        match votes.total() {
-            0 => write!(
-                f,
-                "{}{} has neutral karma (+{}, -{})",
-                self.main, is_group_marker, votes.up, votes.down
-            ),
-            _ => write!(
-                f,
-                "{}{} has a karma of {}",
-                is_group_marker, self.main, votes
-            ),
-        }
+        write!(f, "{}{}", self.main, is_group_marker,)
     }
 }
 
@@ -191,6 +172,23 @@ impl KarmaGroup {
         let mut karmas = std::collections::BTreeMap::new();
         karmas.insert(karma.term.to_owned(), karma);
         KarmaGroup { karmas, main }
+    }
+
+    pub fn report(&self, w: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        let votes = self.votes();
+        let is_group_marker = if self.karmas.len() > 1 { " (+)" } else { "" };
+        match votes.total() {
+            0 => write!(
+                w,
+                "{}{} has neutral karma (+{}, -{})",
+                self.main, is_group_marker, votes.up, votes.down
+            ),
+            _ => write!(
+                w,
+                "{}{} has a karma of {}",
+                is_group_marker, self.main, votes
+            ),
+        }
     }
 
     pub fn get_from_dazeus(
@@ -269,6 +267,6 @@ impl KarmaGroup {
     }
 }
 
-fn canonicalize_term(term: &str) -> String {
+pub fn canonicalize_term(term: &str) -> String {
     term.to_ascii_lowercase()
 }

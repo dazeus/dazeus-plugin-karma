@@ -1,4 +1,4 @@
-use crate::karma::{Karma, KarmaChange, KarmaGroup, KarmaStyle};
+use crate::karma::{canonicalize_term, Karma, KarmaChange, KarmaGroup, KarmaStyle};
 use crate::parse::line;
 use dazeus::{DaZeusClient, Event, Scope};
 
@@ -75,7 +75,10 @@ pub fn reply_to_karma_command(evt: &Event, dazeus: &dyn DaZeusClient) {
     let term = evt[4].trim();
     if !term.is_empty() {
         let karma_group = KarmaGroup::get_from_dazeus_or_new(dazeus, scope, term);
-        let reply = karma_group.to_string();
+        let mut reply = String::new();
+        karma_group
+            .report(&mut reply)
+            .expect("fmt operation failed");
         info!(
             "{}karma {} command in {}/{} from '{}'; reply with '{}'",
             highlight_char, term, &evt[0], &evt[2], &evt[1], reply
@@ -92,7 +95,8 @@ pub fn reply_to_karma_command(evt: &Event, dazeus: &dyn DaZeusClient) {
 
 pub fn reply_to_karmafight_command(evt: &Event, dazeus: &dyn DaZeusClient) {
     let highlight_char = &dazeus.get_highlight_char().unwrap_or_default();
-    if !evt.len() > 5 {
+    dbg!(evt, evt.len(), !evt.len() > 5);
+    if evt.len() <= 5 {
         info!(
             "{}karmafight command in {}/{} from '{}' with no terms",
             highlight_char, &evt[0], &evt[2], &evt[1]
@@ -101,7 +105,7 @@ pub fn reply_to_karmafight_command(evt: &Event, dazeus: &dyn DaZeusClient) {
         return;
     }
 
-    let karmas = retrieve_all_karmas(evt, dazeus);
+    let karmas = retrieve_all_karma_groups(evt, dazeus);
     if karmas.len() == 1 {
         info!(
             "{}karmafight command in {}/{} from '{}' with only one term",
@@ -114,18 +118,14 @@ pub fn reply_to_karmafight_command(evt: &Event, dazeus: &dyn DaZeusClient) {
     let highest = find_highest_karma(karmas);
     let reply = if highest.len() == 1 {
         let first = highest.first().unwrap();
-        format!(
-            "{} wins with {}",
-            first.original_term,
-            first.votes.to_string()
-        )
+        format!("{} wins with {}", first, first.votes())
     } else {
         let terms = highest
             .iter()
-            .map(|e| e.original_term.clone())
-            .collect::<Vec<String>>()
+            .map(|kg| &kg.main[..])
+            .collect::<Vec<&str>>()
             .join(", ");
-        let karma = highest.first().unwrap().votes.total();
+        let karma = highest.first().unwrap().votes().total();
         format!("{} all have the same karma: {}", terms, karma)
     };
     info!(
@@ -153,32 +153,30 @@ pub fn reply_with_redirect(to: &'static str, evt: &Event, dazeus: &dyn DaZeusCli
     dazeus.reply(&evt, &msg, true);
 }
 
-fn find_highest_karma(karmas: Vec<Karma>) -> Vec<Karma> {
-    let mut highest: Vec<Karma> = Vec::new();
-    for item in karmas {
-        if highest.is_empty() || highest.first().unwrap().votes.total() == item.votes.total() {
-            highest.push(item);
-        } else if item.votes.total() > highest.first().unwrap().votes.total() {
-            highest.clear();
-            highest.push(item);
+fn retrieve_all_karma_groups(evt: &Event, dazeus: &dyn DaZeusClient) -> Vec<KarmaGroup> {
+    let scope = Scope::network(&evt[0]);
+    let mut karma_groups = Vec::new();
+    for term in evt.params.iter().skip(5) {
+        let term = canonicalize_term(term);
+        if !karma_groups
+            .iter()
+            .any(|kg: &KarmaGroup| kg.karmas.contains_key(&term))
+        {
+            karma_groups.push(KarmaGroup::get_from_dazeus_or_new(
+                dazeus,
+                scope.clone(),
+                &term,
+            ))
         }
     }
-
-    highest.sort_by(|a, b| a.votes.up.cmp(&b.votes.up));
-    highest
+    karma_groups
 }
 
-fn retrieve_all_karmas(evt: &Event, dazeus: &dyn DaZeusClient) -> Vec<Karma> {
-    let mut karmas = Vec::new();
-    for key in 5..evt.len() {
-        if !karmas.iter().any(|e: &Karma| e.term == evt[key]) {
-            karmas.push(
-                match Karma::get_from_dazeus(dazeus, Scope::network(&evt[0]), &evt[key]) {
-                    Ok(karma) => karma,
-                    _ => Karma::new(&evt[key]),
-                },
-            );
-        }
+fn find_highest_karma(mut karmas: Vec<KarmaGroup>) -> Vec<KarmaGroup> {
+    karmas.sort_by(|kg1, kg2| kg2.votes().total().cmp(&kg1.votes().total()));
+    let highest_karma_value = karmas.first().map(|kg| kg.votes().total());
+    while karmas.last().map(|kg| kg.votes().total()) < highest_karma_value {
+        karmas.pop().unwrap();
     }
     karmas
 }
