@@ -176,19 +176,34 @@ impl KarmaGroup {
 
     pub fn report(&self, w: &mut dyn std::fmt::Write) -> std::fmt::Result {
         let votes = self.votes();
-        let is_group_marker = if self.karmas.len() > 1 { " (+)" } else { "" };
         match votes.total() {
             0 => write!(
                 w,
-                "{}{} has neutral karma (+{}, -{})",
-                self.main, is_group_marker, votes.up, votes.down
+                "{} has neutral karma (+{}, -{})",
+                self.main, votes.up, votes.down
             ),
-            _ => write!(
-                w,
-                "{}{} has a karma of {}",
-                is_group_marker, self.main, votes
-            ),
+            _ => write!(w, "{} has a karma of {}", self.main, votes),
         }
+    }
+
+    pub fn describe_structure(&self, w: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        if self.karmas.len() <= 1 {
+            // This term is not linked with other terms.
+            return write!(w, "{} is not linked", self.main);
+        }
+
+        let karmas = self
+            .karmas
+            .values()
+            .filter(|k| k.term != self.main)
+            .map(|k| format!("'{}'", &k.term))
+            .collect::<Vec<_>>();
+        let verb = if karmas.len() == 1 {
+            "redirects"
+        } else {
+            "redirect"
+        };
+        write!(w, "{} {} to {}", karmas.join(", "), verb, self.main)
     }
 
     pub fn get_from_dazeus(
@@ -203,6 +218,9 @@ impl KarmaGroup {
 
         let mut terms_left: Vec<String> = vec![(term.into())];
         while let Some(term) = terms_left.pop() {
+            if karmas.contains_key(&term) {
+                continue;
+            }
             let karma = match (
                 Karma::get_from_dazeus(dazeus, scope.clone(), &term),
                 may_fail,
@@ -237,10 +255,11 @@ impl KarmaGroup {
         }
 
         if main.is_none() {
-            warn!(
-                "bad database data: no main found in group {:?}",
-                karmas.values().map(|karma: &Karma| &karma.term)
-            );
+            let group = karmas.values().map(|karma: &Karma| &karma.term);
+            trace!("no main found in group {:?}", group);
+            if karmas.len() > 1 {
+                warn!("bad database data: no main found in group {:?}", group);
+            }
 
             // What to do else but picking guessing the one that the user specified?
             main = Some(term.to_owned());

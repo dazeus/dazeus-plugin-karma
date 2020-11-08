@@ -75,20 +75,20 @@ fn main() {
         reply_with_redirect("karmafight", &evt, dazeus);
     });
 
-    dazeus.subscribe_command("karmamerge", |evt, dazeus| {
-        reply_to_karmamerge_command(&evt, dazeus);
+    dazeus.subscribe_command("karmalink", |evt, dazeus| {
+        reply_to_karmalink_command(&evt, dazeus);
     });
 
-    dazeus.subscribe_command("karma-merge", |evt, dazeus| {
-        reply_with_redirect("karmamerge", &evt, dazeus);
+    dazeus.subscribe_command("karma-link", |evt, dazeus| {
+        reply_with_redirect("karmalink", &evt, dazeus);
     });
 
-    dazeus.subscribe_command("karmasplit", |evt, dazeus| {
-        reply_to_karmasplit_command(&evt, dazeus);
+    dazeus.subscribe_command("karmaunlink", |evt, dazeus| {
+        reply_to_karmaunlink_command(&evt, dazeus);
     });
 
-    dazeus.subscribe_command("karma-split", |evt, dazeus| {
-        reply_with_redirect("karmasplit", &evt, dazeus);
+    dazeus.subscribe_command("karma-unlink", |evt, dazeus| {
+        reply_with_redirect("karmaunlink", &evt, dazeus);
     });
 
     dazeus.listen().expect("dazeus error");
