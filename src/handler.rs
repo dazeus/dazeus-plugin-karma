@@ -2,6 +2,10 @@ use crate::karma::{canonicalize_term, Karma, KarmaChange, KarmaGroup, KarmaStyle
 use crate::parse::line;
 use dazeus::{DaZeusClient, Event, Scope};
 
+// TODO(dsprenkels) Add a function that takes an event, and returns a Event struct
+// that has properly annotated fields (instead of just evt[idx]), with idx some magic
+// number.
+
 pub fn handle_karma_events(evt: &Event, dazeus: &dyn DaZeusClient) {
     let parse = line(&evt[3]);
     match parse {
@@ -15,9 +19,16 @@ pub fn handle_karma_events(evt: &Event, dazeus: &dyn DaZeusClient) {
 
 fn register_votes(evt: &Event, dazeus: &dyn DaZeusClient, karma_changes: &[KarmaChange]) {
     let scope = Scope::network(&evt[0]);
-    let karma_changes = get_change_totals(karma_changes);
-    for karma_change in karma_changes.values() {
-        trace!("registering vote for {:?}", karma_change);
+    let mut karma_groups = Vec::new();
+    for karma_change in karma_changes {
+        debug!(
+            "registering karma change ({:+}) from '{}' in {}/{} for {:?}",
+            karma_change.votes.total(),
+            &evt[1],
+            &evt[0],
+            &evt[2],
+            karma_change.term
+        );
         let mut karma = Karma::get_from_dazeus_or_new(dazeus, scope.clone(), &karma_change.term);
         karma.vote(&karma_change.votes);
         if let Err(err) = karma.save(scope.clone(), dazeus) {
@@ -26,47 +37,47 @@ fn register_votes(evt: &Event, dazeus: &dyn DaZeusClient, karma_changes: &[Karma
             dazeus.reply(&evt, &msg, false);
             continue;
         }
+
         let increase = karma_change.votes.total();
+        let group_idx = karma_groups
+            .iter()
+            .position(|(kg, _, _): &(KarmaGroup, _, _)| kg.karmas.contains_key(&karma.term));
+        if let Some(group_idx) = group_idx {
+            karma_groups[group_idx].1 += increase;
+            karma_groups[group_idx].2 =
+                KarmaStyle::most_explicit(karma_groups[group_idx].2, karma_change.style);
+        } else {
+            let kg = KarmaGroup::get_from_dazeus_or_new(dazeus, scope.clone(), &karma.term);
+            karma_groups.push((kg, increase, karma_change.style))
+        }
+    }
+
+    for (kg, increase, style) in karma_groups {
+        if style != KarmaStyle::Notify {
+            continue;
+        }
         let msg = match () {
             () if increase > 0 => format!(
                 "{} increased the karma of {} to {}",
                 &evt[1],
-                karma.term,
-                karma.votes.total()
+                kg.main,
+                kg.votes().total()
             ),
             () if increase < 0 => format!(
                 "{} decreased the karma of {} to {}",
                 &evt[1],
-                karma.term,
-                karma.votes.total()
+                kg.main,
+                kg.votes().total()
             ),
             () => format!(
-                "{} touched the karma of {} to {}",
+                "{} touched the karma of {} and its value remains {}",
                 &evt[1],
-                karma.term,
-                karma.votes.total()
+                kg.main,
+                kg.votes().total()
             ),
         };
         dazeus.reply(&evt, &msg, false);
     }
-}
-
-fn get_change_totals(
-    karma_changes: &[KarmaChange],
-) -> std::collections::BTreeMap<String, KarmaChange> {
-    let mut totals: std::collections::BTreeMap<_, KarmaChange> = std::collections::BTreeMap::new();
-    for current_change in karma_changes {
-        if let Some(cached_karma_change) = totals.get_mut(&current_change.term) {
-            assert_eq!(&cached_karma_change.term, &current_change.term);
-            cached_karma_change.votes.up += current_change.votes.up;
-            cached_karma_change.votes.down += current_change.votes.down;
-            cached_karma_change.style =
-                KarmaStyle::most_explicit(cached_karma_change.style, current_change.style);
-        } else {
-            totals.insert(current_change.term.to_owned(), current_change.to_owned());
-        }
-    }
-    totals
 }
 
 pub fn reply_to_karma_command(evt: &Event, dazeus: &dyn DaZeusClient) {
