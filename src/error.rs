@@ -1,11 +1,13 @@
 #[derive(Debug)]
 pub struct KarmaError {
-    descr: String
+    descr: String,
 }
 
 impl KarmaError {
     pub fn new(descr: &str) -> KarmaError {
-        KarmaError { descr: descr.to_string() }
+        KarmaError {
+            descr: descr.to_string(),
+        }
     }
 }
 

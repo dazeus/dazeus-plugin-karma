@@ -8,9 +8,9 @@ use nom::{
     IResult,
 };
 
-use crate::karma::{Karma, KarmaChange, KarmaStyle};
+use crate::karma::{KarmaAmount, KarmaChange, KarmaStyle};
 
-pub fn line(input: &str) -> IResult<&str, Vec<Karma>> {
+pub fn line(input: &str) -> IResult<&str, Vec<KarmaChange>> {
     fold_many0(element, Vec::new(), |mut acc, elem| {
         if let Some(elem) = elem {
             acc.push(elem);
@@ -19,61 +19,40 @@ pub fn line(input: &str) -> IResult<&str, Vec<Karma>> {
     })(input)
 }
 
-fn element(input: &str) -> IResult<&str, Option<Karma>> {
+fn element(input: &str) -> IResult<&str, Option<KarmaChange>> {
     let karma = map(karma_change, Some);
     let anychar = value(None, anychar);
     alt((karma, anychar))(input)
 }
 
-fn karma_change(input: &str) -> IResult<&str, Karma> {
+fn karma_change(input: &str) -> IResult<&str, KarmaChange> {
     alt((explicit_karma_change, implicit_karma_change))(input)
 }
 
-fn explicit_karma_change(input: &str) -> IResult<&str, Karma> {
+fn explicit_karma_change(input: &str) -> IResult<&str, KarmaChange> {
     alt((explicit_karma_notice_change, explicit_karma_silent_change))(input)
 }
 
-fn explicit_karma_notice_change(input: &str) -> IResult<&str, Karma> {
+fn explicit_karma_notice_change(input: &str) -> IResult<&str, KarmaChange> {
     let (input, _) = tag("[")(input)?;
     let (input, term) = take_till(is_notice_char)(input)?;
     let (input, _) = tag("]")(input)?;
-    let (input, change) = modifier(input)?;
-    Ok((
-        input,
-        Karma {
-            term: term.to_owned(),
-            change,
-            style: KarmaStyle::Notify,
-        },
-    ))
+    let (input, votes) = modifier(input)?;
+    Ok((input, KarmaChange::new(term, votes, KarmaStyle::Notify)))
 }
 
-fn explicit_karma_silent_change(input: &str) -> IResult<&str, Karma> {
+fn explicit_karma_silent_change(input: &str) -> IResult<&str, KarmaChange> {
     let (input, _) = tag("(")(input)?;
     let (input, term) = take_till(is_silent_char)(input)?;
     let (input, _) = tag(")")(input)?;
-    let (input, change) = modifier(input)?;
-    Ok((
-        input,
-        Karma {
-            term: term.to_owned(),
-            change,
-            style: KarmaStyle::Notify,
-        },
-    ))
+    let (input, votes) = modifier(input)?;
+    Ok((input, KarmaChange::new(term, votes, KarmaStyle::Silent)))
 }
 
-fn implicit_karma_change(input: &str) -> IResult<&str, Karma> {
+fn implicit_karma_change(input: &str) -> IResult<&str, KarmaChange> {
     let (input, term) = implicit_chars(input)?;
-    let (input, change) = modifier(input)?;
-    Ok((
-        input,
-        Karma {
-            term,
-            change,
-            style: KarmaStyle::Notify,
-        },
-    ))
+    let (input, votes) = modifier(input)?;
+    Ok((input, KarmaChange::new(&term, votes, KarmaStyle::Implicit)))
 }
 
 fn implicit_chars(input: &str) -> IResult<&str, String> {
@@ -102,13 +81,13 @@ fn is_silent_char(c: char) -> bool {
     matches!(c, '(' | ')')
 }
 
-fn modifier(input: &str) -> IResult<&str, KarmaChange> {
+fn modifier(input: &str) -> IResult<&str, KarmaAmount> {
     let (input, modifier) = alt((tag("++"), tag("--")))(input)?;
     let (input, _) = word_boundary(input)?;
 
     let change = match modifier {
-        "++" => KarmaChange { up: 1, down: 0 },
-        "--" => KarmaChange { up: 0, down: 1 },
+        "++" => KarmaAmount { up: 1, down: 0 },
+        "--" => KarmaAmount { up: 0, down: 1 },
         _ => unreachable!(),
     };
     Ok((input, change))
