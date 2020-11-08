@@ -70,54 +70,69 @@ fn get_change_totals(
 }
 
 pub fn reply_to_karma_command(evt: &Event, dazeus: &dyn DaZeusClient) {
+    let highlight_char = &dazeus.get_highlight_char().unwrap_or_default();
     let scope = Scope::network(&evt[0]);
     let term = evt[4].trim();
     if !term.is_empty() {
         let karma_group = KarmaGroup::get_from_dazeus_or_new(dazeus, scope, term);
         let reply = karma_group.to_string();
-
+        info!(
+            "{}karma {} command in {}/{} from '{}'; reply with '{}'",
+            highlight_char, term, &evt[0], &evt[2], &evt[1], reply
+        );
         dazeus.reply(&evt, &reply[..], false);
     } else {
+        info!(
+            "{}karma command in {}/{} from '{}' with no term specified",
+            highlight_char, &evt[0], &evt[2], &evt[1]
+        );
         dazeus.reply(&evt, "What do you want to know the karma of?", true);
     }
 }
 
 pub fn reply_to_karmafight_command(evt: &Event, dazeus: &dyn DaZeusClient) {
-    if evt.len() > 5 {
-        let karmas = retrieve_all_karmas(evt, dazeus);
-        if karmas.len() == 1 {
-            dazeus.reply(&evt, "What kind of fight would this be?", true);
-        } else {
-            let highest = find_highest_karma(karmas);
-
-            if highest.len() == 1 {
-                let first = highest.first().unwrap();
-                dazeus.reply(
-                    &evt,
-                    &format!(
-                        "{} wins with {}",
-                        first.original_term,
-                        first.votes.to_string()
-                    )[..],
-                    false,
-                );
-            } else {
-                let terms = highest
-                    .iter()
-                    .map(|e| e.original_term.clone())
-                    .collect::<Vec<String>>()
-                    .join(", ");
-                let karma = highest.first().unwrap().votes.total();
-                dazeus.reply(
-                    &evt,
-                    &format!("{} all have the same karma: {}", terms, karma)[..],
-                    false,
-                );
-            }
-        }
-    } else {
+    let highlight_char = &dazeus.get_highlight_char().unwrap_or_default();
+    if !evt.len() > 5 {
+        info!(
+            "{}karmafight command in {}/{} from '{}' with no terms",
+            highlight_char, &evt[0], &evt[2], &evt[1]
+        );
         dazeus.reply(&evt, "What should the fight be between?", true);
+        return;
     }
+
+    let karmas = retrieve_all_karmas(evt, dazeus);
+    if karmas.len() == 1 {
+        info!(
+            "{}karmafight command in {}/{} from '{}' with only one term",
+            highlight_char, &evt[0], &evt[2], &evt[1]
+        );
+        dazeus.reply(&evt, "What kind of fight would this be?", true);
+        return;
+    }
+
+    let highest = find_highest_karma(karmas);
+    let reply = if highest.len() == 1 {
+        let first = highest.first().unwrap();
+        format!(
+            "{} wins with {}",
+            first.original_term,
+            first.votes.to_string()
+        )
+    } else {
+        let terms = highest
+            .iter()
+            .map(|e| e.original_term.clone())
+            .collect::<Vec<String>>()
+            .join(", ");
+        let karma = highest.first().unwrap().votes.total();
+        format!("{} all have the same karma: {}", terms, karma)
+    };
+    info!(
+        "reply to {}karmafight command in {}/{} from '{}': {}",
+        highlight_char, &evt[0], &evt[2], &evt[1], &reply
+    );
+    dazeus.reply(&evt, &reply, false);
 }
 
 pub fn reply_to_karmamerge_command(evt: &Event, _dazeus: &dyn DaZeusClient) {
