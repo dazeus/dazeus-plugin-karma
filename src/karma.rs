@@ -13,7 +13,7 @@ pub struct KarmaAmount {
 }
 
 impl std::fmt::Display for KarmaAmount {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{} (+{}, -{})", self.total(), self.up, self.down)
     }
 }
@@ -48,7 +48,7 @@ impl KarmaStyle {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct KarmaChange {
     pub term: String,
     pub votes: KarmaAmount,
@@ -58,7 +58,7 @@ pub struct KarmaChange {
 impl KarmaChange {
     pub fn new(term: &str, votes: KarmaAmount, style: KarmaStyle) -> KarmaChange {
         KarmaChange {
-            term: term.to_ascii_lowercase(),
+            term: canonicalize_term(term),
             votes,
             style,
         }
@@ -71,7 +71,7 @@ pub enum Aliases {
     FromOther(Vec<String>),
 }
 
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Karma {
     pub term: String,
     pub original_term: String,
@@ -81,11 +81,24 @@ pub struct Karma {
     pub aliases: Option<Aliases>,
 }
 
+impl std::fmt::Display for Karma {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self.votes.total() {
+            0 => write!(
+                f,
+                "{} has neutral karma (+{}, -{})",
+                self.original_term, self.votes.up, self.votes.down
+            ),
+            _ => write!(f, "{} has a karma of {}", self.original_term, self.votes),
+        }
+    }
+}
+
 impl Karma {
     pub fn new(term: &str) -> Karma {
         let now = Local::now();
         Karma {
-            term: term.to_ascii_lowercase(),
+            term: canonicalize_term(term),
             original_term: term.to_string(),
             votes: KarmaAmount::default(),
             last_vote: Some(now),
@@ -115,7 +128,7 @@ impl Karma {
         scope: Scope,
         term: &str,
     ) -> Result<Karma, Box<dyn std::error::Error>> {
-        let property = format!("{}{}", STORE_PREFIX, term.to_ascii_lowercase());
+        let property = format!("{}{}", STORE_PREFIX, canonicalize_term(term));
         let json = dazeus.get_property(&property[..], scope);
         let mut karma = Karma::from_response(&json);
         if let Ok(ref mut k) = karma {
@@ -124,12 +137,11 @@ impl Karma {
         karma
     }
 
-    pub fn get_from_dazeus_or_default(
-        dazeus: &dyn DaZeusClient,
-        scope: Scope,
-        term: &str,
-    ) -> Karma {
-        Self::get_from_dazeus(dazeus, scope, term).unwrap_or_default()
+    pub fn get_from_dazeus_or_new(dazeus: &dyn DaZeusClient, scope: Scope, term: &str) -> Karma {
+        Self::get_from_dazeus(dazeus, scope, term).unwrap_or_else(|_| {
+            info!("creating new karma for '{}'", term);
+            Karma::new(term)
+        })
     }
 
     pub fn save(
@@ -139,21 +151,11 @@ impl Karma {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let property = format!("{}{}", STORE_PREFIX, &self.term);
         dazeus.set_property(
-            &property[..].to_ascii_lowercase(),
+            &canonicalize_term(&property[..]),
             &serde_json::ser::to_string(&self)?,
             scope,
         );
         Ok(())
-    }
-
-    pub fn to_string(&self) -> Result<String, Box<dyn std::error::Error>> {
-        Ok(match self.votes.total() {
-            0 => format!(
-                "{} has neutral karma (+{}, -{})",
-                self.original_term, self.votes.up, self.votes.down
-            ),
-            _ => format!("{} has a karma of {}", self.original_term, self.votes),
-        })
     }
 }
 
@@ -163,8 +165,35 @@ pub struct KarmaGroup {
     pub main: String,
 }
 
+impl std::fmt::Display for KarmaGroup {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let votes = self.votes();
+        let is_group_marker = if self.karmas.len() > 1 { " (+)" } else { "" };
+        match votes.total() {
+            0 => write!(
+                f,
+                "{}{} has neutral karma (+{}, -{})",
+                self.main, is_group_marker, votes.up, votes.down
+            ),
+            _ => write!(
+                f,
+                "{}{} has a karma of {}",
+                is_group_marker, self.main, votes
+            ),
+        }
+    }
+}
+
 impl KarmaGroup {
-    pub fn from_dazeus(
+    pub fn new(term: &str) -> KarmaGroup {
+        let karma = Karma::new(term);
+        let main = karma.term.to_owned();
+        let mut karmas = std::collections::BTreeMap::new();
+        karmas.insert(karma.term.to_owned(), karma);
+        KarmaGroup { karmas, main }
+    }
+
+    pub fn get_from_dazeus(
         dazeus: &dyn DaZeusClient,
         scope: Scope,
         term: &str,
@@ -197,7 +226,7 @@ impl KarmaGroup {
 
                     // Other terms are redirecting to this alias, so this is the "main" concept.
                     if let Some(main) = &main {
-                        warn!("bad database data: both '{}' and '{}' are labelled as main karma concept", main, term);
+                        warn!("bad database data: both '{}' and '{}' are labeled as main karma concept", main, term);
                     } else {
                         main = Some(term.clone())
                     }
@@ -222,6 +251,14 @@ impl KarmaGroup {
         Ok(KarmaGroup { karmas, main })
     }
 
+    pub fn get_from_dazeus_or_new(
+        dazeus: &dyn DaZeusClient,
+        scope: Scope,
+        term: &str,
+    ) -> KarmaGroup {
+        KarmaGroup::get_from_dazeus(dazeus, scope, term).unwrap_or_else(|_| KarmaGroup::new(term))
+    }
+
     pub fn votes(&self) -> KarmaAmount {
         let mut total_votes = KarmaAmount::default();
         for karma_amount in self.karmas.values() {
@@ -230,4 +267,8 @@ impl KarmaGroup {
         }
         total_votes
     }
+}
+
+fn canonicalize_term(term: &str) -> String {
+    term.to_ascii_lowercase()
 }

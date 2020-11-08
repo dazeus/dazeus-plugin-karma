@@ -1,8 +1,8 @@
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_till},
-    character::complete::{anychar, satisfy},
-    combinator::{map, opt, peek, value},
+    character::complete::{anychar, one_of, satisfy},
+    combinator::{map, opt, peek},
     multi::{fold_many0, fold_many1},
     sequence::tuple,
     IResult,
@@ -21,7 +21,7 @@ pub fn line(input: &str) -> IResult<&str, Vec<KarmaChange>> {
 
 fn element(input: &str) -> IResult<&str, Option<KarmaChange>> {
     let karma = map(karma_change, Some);
-    let anychar = value(None, anychar);
+    let anychar = discard(anychar);
     alt((karma, anychar))(input)
 }
 
@@ -94,6 +94,17 @@ fn modifier(input: &str) -> IResult<&str, KarmaAmount> {
 }
 
 fn word_boundary(input: &str) -> IResult<&str, ()> {
-    let (input, _) = peek(satisfy(|c| c.is_whitespace() || ",.;:)".contains(c)))(input)?;
-    Ok((input, ()))
+    let whitespace = discard(satisfy(char::is_whitespace));
+    let punctuation = discard(one_of(",.;:)"));
+    let eof = discard(nom::combinator::eof);
+    peek(alt((whitespace, punctuation, eof)))(input)
+}
+
+fn discard<I, O1, O2: Clone + Default, E: nom::error::ParseError<I>, F>(
+    parser: F,
+) -> impl FnMut(I) -> IResult<I, O2, E>
+where
+    F: nom::Parser<I, O1, E>,
+{
+    nom::combinator::value(Default::default(), parser)
 }

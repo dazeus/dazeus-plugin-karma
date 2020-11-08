@@ -1,4 +1,4 @@
-use crate::karma::{Karma, KarmaChange, KarmaStyle};
+use crate::karma::{Karma, KarmaChange, KarmaGroup, KarmaStyle};
 use crate::parse::line;
 use dazeus::{DaZeusClient, Event, Scope};
 
@@ -17,8 +17,8 @@ fn register_votes(evt: &Event, dazeus: &dyn DaZeusClient, karma_changes: &[Karma
     let scope = Scope::network(&evt[0]);
     let karma_changes = get_change_totals(karma_changes);
     for karma_change in karma_changes.values() {
-        let mut karma =
-            Karma::get_from_dazeus_or_default(dazeus, scope.clone(), &karma_change.term);
+        trace!("registering vote for {:?}", karma_change);
+        let mut karma = Karma::get_from_dazeus_or_new(dazeus, scope.clone(), &karma_change.term);
         karma.vote(&karma_change.votes);
         if let Err(err) = karma.save(scope.clone(), dazeus) {
             let msg = format!("failed to save karma '{}': {}", karma.term, err);
@@ -54,34 +54,29 @@ fn register_votes(evt: &Event, dazeus: &dyn DaZeusClient, karma_changes: &[Karma
 fn get_change_totals(
     karma_changes: &[KarmaChange],
 ) -> std::collections::BTreeMap<String, KarmaChange> {
-    let mut totals = std::collections::BTreeMap::new();
+    let mut totals: std::collections::BTreeMap<_, KarmaChange> = std::collections::BTreeMap::new();
     for current_change in karma_changes {
-        if !totals.contains_key(&current_change.term) {
-            totals.insert(current_change.term.to_owned(), KarmaChange::default());
+        if let Some(cached_karma_change) = totals.get_mut(&current_change.term) {
+            assert_eq!(&cached_karma_change.term, &current_change.term);
+            cached_karma_change.votes.up += current_change.votes.up;
+            cached_karma_change.votes.down += current_change.votes.down;
+            cached_karma_change.style =
+                KarmaStyle::most_explicit(cached_karma_change.style, current_change.style);
+        } else {
+            totals.insert(current_change.term.to_owned(), current_change.to_owned());
         }
-        let cached_karma_change = totals.get_mut(&current_change.term).unwrap();
-        assert_eq!(cached_karma_change.term, current_change.term);
-        cached_karma_change.votes.up += current_change.votes.up;
-        cached_karma_change.votes.down += current_change.votes.down;
-        cached_karma_change.style =
-            KarmaStyle::most_explicit(cached_karma_change.style, current_change.style);
     }
     totals
 }
 
 pub fn reply_to_karma_command(evt: &Event, dazeus: &dyn DaZeusClient) {
-    let term = &evt[4].trim();
-    if term != &"" {
-        let karma = match Karma::get_from_dazeus(dazeus, Scope::network(&evt[0]), term) {
-            Ok(karma) => karma,
-            _ => Karma::new(term),
-        };
-        match karma.to_string() {
-            Ok(reply) => {
-                dazeus.reply(&evt, &reply[..], false);
-            }
-            Err(err) => error!("Error counting the karma for '{}': {}", term, err),
-        }
+    let scope = Scope::network(&evt[0]);
+    let term = evt[4].trim();
+    if !term.is_empty() {
+        let karma_group = KarmaGroup::get_from_dazeus_or_new(dazeus, scope, term);
+        let reply = karma_group.to_string();
+
+        dazeus.reply(&evt, &reply[..], false);
     } else {
         dazeus.reply(&evt, "What do you want to know the karma of?", true);
     }
