@@ -42,12 +42,6 @@ pub enum KarmaStyle {
     Notify = 2,
 }
 
-impl Default for KarmaStyle {
-    fn default() -> KarmaStyle {
-        KarmaStyle::Implicit
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct KarmaChange {
     pub term: String,
