@@ -134,11 +134,7 @@ impl Karma {
         dazeus: &dyn DaZeusClient,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let property = format!("{}{}", STORE_PREFIX, &self.term);
-        dazeus.set_property(
-            &canonicalize_term(&property[..]),
-            &serde_json::ser::to_string(&self)?,
-            scope,
-        );
+        dazeus.set_property(&property, &serde_json::ser::to_string(&self)?, scope);
         Ok(())
     }
 }
