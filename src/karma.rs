@@ -118,7 +118,7 @@ impl Karma {
         term: &str,
     ) -> Result<Karma, Box<dyn std::error::Error>> {
         let property = format!("{}{}", STORE_PREFIX, canonicalize_term(term));
-        let json = dazeus.get_property(&property[..], scope);
+        let json = dazeus.get_property(&property, scope);
         let mut karma = Karma::from_response(&json);
         if let Ok(ref mut k) = karma {
             k.original_term = term.to_owned();
