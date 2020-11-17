@@ -1,5 +1,5 @@
 use chrono::{DateTime, Local};
-use dazeus::{DaZeusClient, Response, Scope};
+use dazeus::{DaZeusClient, Scope};
 use serde::{Deserialize, Serialize};
 
 use crate::error::KarmaError;
@@ -99,26 +99,19 @@ impl Karma {
         self.votes = self.votes + *karma;
     }
 
-    fn from_response(r: &Response) -> Result<Karma, Box<dyn std::error::Error>> {
-        let s = r
-            .get_str("value")
-            .ok_or(KarmaError::new("no value found in response"))?;
-        let karma = serde_json::de::from_str(s)?;
-        Ok(karma)
-    }
-
     pub fn get_from_dazeus(
         dazeus: &dyn DaZeusClient,
         scope: Scope,
         term: &str,
     ) -> Result<Karma, Box<dyn std::error::Error>> {
         let property = format!("{}{}", STORE_PREFIX, canonicalize_term(term));
-        let json = dazeus.get_property(&property, scope);
-        let mut karma = Karma::from_response(&json);
-        if let Ok(ref mut k) = karma {
-            k.original_term = term.to_owned();
-        }
-        karma
+        let response = dazeus.get_property(&property, scope);
+        let json = response
+            .get_str("value")
+            .ok_or(KarmaError::new("no value found in response"))?;
+        let mut karma = serde_json::de::from_str::<Karma>(json)?;
+        karma.original_term = term.to_owned();
+        Ok(karma)
     }
 
     pub fn get_from_dazeus_or_new(dazeus: &dyn DaZeusClient, scope: Scope, term: &str) -> Karma {
