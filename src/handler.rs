@@ -48,9 +48,9 @@ fn register_votes(evt: &Event, dazeus: &dyn DaZeusClient, karma_changes: &[Karma
             .iter()
             .position(|kgc: &KarmaGroupChange| kgc.kg.karmas.contains_key(&karma.term));
         if let Some(group_idx) = group_idx {
-            karma_groups[group_idx].increase += increase;
-            karma_groups[group_idx].style =
-                KarmaStyle::most_explicit(karma_groups[group_idx].style, karma_change.style);
+            let kg = &mut karma_groups[group_idx];
+            kg.increase += increase;
+            kg.style = std::cmp::max(kg.style, karma_change.style);
         } else {
             let kg = KarmaGroup::get_from_dazeus_or_new(dazeus, scope.clone(), &karma.term);
             let kgc = KarmaGroupChange {

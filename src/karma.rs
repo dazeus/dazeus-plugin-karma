@@ -35,27 +35,16 @@ impl KarmaAmount {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 pub enum KarmaStyle {
-    Notify,
-    Silent,
-    Implicit,
+    Implicit = 0,
+    Silent = 1,
+    Notify = 2,
 }
 
 impl Default for KarmaStyle {
     fn default() -> KarmaStyle {
         KarmaStyle::Implicit
-    }
-}
-
-impl KarmaStyle {
-    pub fn most_explicit(first: KarmaStyle, second: KarmaStyle) -> KarmaStyle {
-        match (first, second) {
-            (KarmaStyle::Implicit, KarmaStyle::Implicit) => KarmaStyle::Implicit,
-            (KarmaStyle::Silent, KarmaStyle::Notify) => KarmaStyle::Silent,
-            (KarmaStyle::Notify, _) => KarmaStyle::Notify,
-            (_, second) => second,
-        }
     }
 }
 
