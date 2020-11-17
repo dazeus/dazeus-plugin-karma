@@ -18,6 +18,17 @@ impl std::fmt::Display for KarmaAmount {
     }
 }
 
+impl std::ops::Add for KarmaAmount {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        KarmaAmount {
+            up: self.up + rhs.up,
+            down: self.down + rhs.down,
+        }
+    }
+}
+
 impl KarmaAmount {
     pub fn total(&self) -> i64 {
         self.up - self.down
@@ -102,8 +113,7 @@ impl Karma {
 
     pub fn vote(&mut self, karma: &KarmaAmount) {
         self.last_vote = Some(Local::now());
-        self.votes.up += karma.up;
-        self.votes.down += karma.down;
+        self.votes = self.votes + *karma;
     }
 
     fn from_response(r: &Response) -> Result<Karma, Box<dyn std::error::Error>> {
