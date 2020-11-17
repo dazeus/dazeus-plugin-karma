@@ -14,6 +14,15 @@ pub fn handle_karma_events(evt: &Event, dazeus: &dyn DaZeusClient) {
 }
 
 fn register_votes(evt: &Event, dazeus: &dyn DaZeusClient, karma_changes: &[KarmaChange]) {
+    struct KarmaGroupChange {
+        /// Karma group.
+        kg: KarmaGroup,
+        /// The amount of karma that was added accumulated over the complete message.
+        increase: i64,
+        /// The (most verbose) style with which this karma change was updated.
+        style: KarmaStyle,
+    }
+
     let scope = Scope::network(&evt[0]);
     let mut karma_groups = Vec::new();
     for karma_change in karma_changes {
@@ -37,18 +46,28 @@ fn register_votes(evt: &Event, dazeus: &dyn DaZeusClient, karma_changes: &[Karma
         let increase = karma_change.votes.total();
         let group_idx = karma_groups
             .iter()
-            .position(|(kg, _, _): &(KarmaGroup, _, _)| kg.karmas.contains_key(&karma.term));
+            .position(|kgc: &KarmaGroupChange| kgc.kg.karmas.contains_key(&karma.term));
         if let Some(group_idx) = group_idx {
-            karma_groups[group_idx].1 += increase;
-            karma_groups[group_idx].2 =
-                KarmaStyle::most_explicit(karma_groups[group_idx].2, karma_change.style);
+            karma_groups[group_idx].increase += increase;
+            karma_groups[group_idx].style =
+                KarmaStyle::most_explicit(karma_groups[group_idx].style, karma_change.style);
         } else {
             let kg = KarmaGroup::get_from_dazeus_or_new(dazeus, scope.clone(), &karma.term);
-            karma_groups.push((kg, increase, karma_change.style))
+            let kgc = KarmaGroupChange {
+                kg,
+                increase,
+                style: karma_change.style,
+            };
+            karma_groups.push(kgc)
         }
     }
 
-    for (kg, increase, style) in karma_groups {
+    for KarmaGroupChange {
+        kg,
+        increase,
+        style,
+    } in karma_groups
+    {
         if style != KarmaStyle::Notify {
             continue;
         }
