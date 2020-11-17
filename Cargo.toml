@@ -1,7 +1,7 @@
 [package]
 name = "dazeus-plugin-karma"
 version = "0.1.0"
-authors = ["Ruben Nijveld <ruben@gewooniets.nl>"]
+authors = ["Ruben Nijveld <ruben@gewooniets.nl>", "Daan Sprenkels <daan@dsprenkels.com>"]
 edition = "2018"
 
 [dependencies]
