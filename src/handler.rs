@@ -230,6 +230,9 @@ fn karmalink_stat(evt: &Event, dazeus: &dyn DaZeusClient, term: &String) {
 }
 
 fn karmalink_link(evt: &Event, dazeus: &dyn DaZeusClient, terms: &[String], main: &String) {
+    // TODO(dsprenkels): Refactor the linking logic into a separate funtion
+    // in the karma module.
+
     let scope = Scope::network(&evt[0]);
     let highlight_char = &dazeus.get_highlight_char().unwrap_or_default();
 
@@ -299,6 +302,9 @@ fn karmalink_link(evt: &Event, dazeus: &dyn DaZeusClient, terms: &[String], main
 }
 
 pub fn reply_to_karmaunlink_command(evt: &Event, dazeus: &dyn DaZeusClient) {
+    // TODO(dsprenkels): Refactor the unlinking logic into a separate funtion
+    // in the karma module.
+
     let scope = Scope::network(&evt[0]);
     let highlight_char = &dazeus.get_highlight_char().unwrap_or_default();
     let term = &evt[5];
