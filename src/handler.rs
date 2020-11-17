@@ -118,7 +118,11 @@ pub fn reply_to_karmafight_command(evt: &Event, dazeus: &dyn DaZeusClient) {
             "{}karmafight command in {}/{} from '{}' with only one term",
             highlight_char, &evt[0], &evt[2], &evt[1]
         );
-        dazeus.reply(&evt, "Only one term. What kind of fight would this be?", true);
+        dazeus.reply(
+            &evt,
+            "Only one term. What kind of fight would this be?",
+            true,
+        );
         return;
     }
 

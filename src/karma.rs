@@ -117,7 +117,9 @@ impl Karma {
     }
 
     fn from_response(r: &Response) -> Result<Karma, Box<dyn std::error::Error>> {
-        let s = r.get_str("value").ok_or(KarmaError::new("no value found in response"))?;
+        let s = r
+            .get_str("value")
+            .ok_or(KarmaError::new("no value found in response"))?;
         let karma = serde_json::de::from_str(s)?;
         Ok(karma)
     }
