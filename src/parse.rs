@@ -2,7 +2,7 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, take_till},
     character::complete::{anychar, one_of, satisfy},
-    combinator::{map, opt, peek},
+    combinator::{map, opt, peek, value},
     multi::{fold_many0, fold_many1},
     sequence::tuple,
     IResult,
@@ -82,14 +82,11 @@ fn is_silent_char(c: char) -> bool {
 }
 
 fn modifier(input: &str) -> IResult<&str, KarmaAmount> {
-    let (input, modifier) = alt((tag("++"), tag("--")))(input)?;
-    let (input, _) = word_boundary(input)?;
+    let increase = value(KarmaAmount { up: 1, down: 0 }, tag("++"));
+    let decrease = value(KarmaAmount { up: 0, down: 1 }, tag("--"));
 
-    let change = match modifier {
-        "++" => KarmaAmount { up: 1, down: 0 },
-        "--" => KarmaAmount { up: 0, down: 1 },
-        _ => unreachable!(),
-    };
+    let (input, change) = alt((increase, decrease))(input)?;
+    let (input, _) = word_boundary(input)?;
     Ok((input, change))
 }
 
@@ -106,5 +103,5 @@ fn discard<I, O1, O2: Clone + Default, E: nom::error::ParseError<I>, F>(
 where
     F: nom::Parser<I, O1, E>,
 {
-    nom::combinator::value(Default::default(), parser)
+    value(Default::default(), parser)
 }
