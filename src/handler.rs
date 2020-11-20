@@ -1,124 +1,359 @@
+use crate::karma::{canonicalize_term, Aliases, Karma, KarmaChange, KarmaGroup, KarmaStyle};
+use crate::parse::line;
 use dazeus::{DaZeusClient, Event, Scope};
-use super::grammar::line;
-use super::karma::{Karma, KarmaStyle, KarmaValue};
-use std::error::Error;
-use rustc_serialize::json::ToJson;
-use std::ascii::AsciiExt;
 
-pub fn handle_karma_events(evt: &Event, dazeus: &DaZeusClient) {
-    match line(&evt[3]) {
-        Ok(changes) => {
-            let totals = get_change_totals(changes);
-            for change in totals {
-                let value = store_karma_change(&change, Scope::network(&evt[0]), dazeus).unwrap();
-                if change.style == KarmaStyle::Notify {
-                    let updown = if change.change.total() < 0 { "decreased" } else { "increased" };
-                    dazeus.reply(&evt, &format!("{} {} the karma of {} to {}", &evt[1], updown, change.term, value.votes.to_string())[..], false);
-                }
-            }
-        }
-        Err(_) => warn!("Got a message I don't understand in '{}/{}' from '{}': {}", &evt[0], &evt[2], &evt[1], &evt[3])
+pub fn handle_karma_events(evt: &Event, dazeus: &dyn DaZeusClient) {
+    let parse = line(&evt[3]);
+    match parse {
+        Ok((_, changes)) => register_votes(evt, dazeus, &changes),
+        Err(err) => warn!(
+            "parsing message failed in '{}/{}' from '{}': {} ({})",
+            &evt[0], &evt[2], &evt[1], &evt[3], err
+        ),
     }
 }
 
-pub fn reply_to_karma_command(evt: &Event, dazeus: &DaZeusClient) {
-    let term = &evt[4].trim();
-    if term != &"" {
-        let karma = match KarmaValue::from_dazeus(dazeus, Scope::network(&evt[0]), term) {
-            Ok(karma) => karma,
-            _ => KarmaValue::new(term),
+fn register_votes(evt: &Event, dazeus: &dyn DaZeusClient, karma_changes: &[KarmaChange]) {
+    struct KarmaGroupChange {
+        /// Karma group.
+        kg: KarmaGroup,
+        /// The amount of karma that was added accumulated over the complete message.
+        increase: i64,
+        /// The (most verbose) style with which this karma change was updated.
+        style: KarmaStyle,
+    }
+
+    let scope = Scope::network(&evt[0]);
+    let mut karma_groups = Vec::new();
+    for karma_change in karma_changes {
+        debug!(
+            "registering karma change ({:+}) from '{}' in {}/{} for {:?}",
+            karma_change.votes.total(),
+            &evt[1],
+            &evt[0],
+            &evt[2],
+            karma_change.term
+        );
+        let mut karma = Karma::get_from_dazeus_or_new(dazeus, scope.clone(), &karma_change.term);
+        karma.vote(&karma_change.votes);
+        if let Err(err) = karma.save(scope.clone(), dazeus) {
+            let msg = format!("failed to save karma '{}': {}", karma.term, err);
+            error!("{}", msg);
+            dazeus.reply(&evt, &msg, false);
+            continue;
+        }
+
+        let increase = karma_change.votes.total();
+        let group_idx = karma_groups
+            .iter()
+            .position(|kgc: &KarmaGroupChange| kgc.kg.karmas.contains_key(&karma.term));
+        if let Some(group_idx) = group_idx {
+            let kg = &mut karma_groups[group_idx];
+            kg.increase += increase;
+            kg.style = std::cmp::max(kg.style, karma_change.style);
+        } else {
+            let kg = KarmaGroup::get_from_dazeus_or_new(dazeus, scope.clone(), &karma.term);
+            let kgc = KarmaGroupChange {
+                kg,
+                increase,
+                style: karma_change.style,
+            };
+            karma_groups.push(kgc)
+        }
+    }
+
+    for KarmaGroupChange {
+        kg,
+        increase,
+        style,
+    } in karma_groups
+    {
+        if style != KarmaStyle::Notify {
+            continue;
+        }
+        let msg = match () {
+            () if increase > 0 => format!(
+                "{} increased the karma of {} to {}",
+                &evt[1],
+                kg.main,
+                kg.votes().total()
+            ),
+            () if increase < 0 => format!(
+                "{} decreased the karma of {} to {}",
+                &evt[1],
+                kg.main,
+                kg.votes().total()
+            ),
+            () => format!(
+                "{} touched the karma of {} and its value remains {}",
+                &evt[1],
+                kg.main,
+                kg.votes().total()
+            ),
         };
-        dazeus.reply(&evt, &karma.to_string()[..], false);
+        dazeus.reply(&evt, &msg, false);
+    }
+}
+
+pub fn reply_to_karma_command(evt: &Event, dazeus: &dyn DaZeusClient) {
+    let highlight_char = &dazeus.get_highlight_char().unwrap_or_default();
+    let scope = Scope::network(&evt[0]);
+    let term = evt[4].trim();
+    if !term.is_empty() {
+        let karma_group = KarmaGroup::get_from_dazeus_or_new(dazeus, scope, term);
+        let mut reply = String::new();
+        karma_group
+            .report(&mut reply)
+            .expect("fmt operation failed");
+        info!(
+            "{}karma {} command in {}/{} from '{}'; reply with '{}'",
+            highlight_char, term, &evt[0], &evt[2], &evt[1], reply
+        );
+        dazeus.reply(&evt, &reply[..], false);
     } else {
+        info!(
+            "{}karma command in {}/{} from '{}' with no term specified",
+            highlight_char, &evt[0], &evt[2], &evt[1]
+        );
         dazeus.reply(&evt, "What do you want to know the karma of?", true);
     }
 }
 
-pub fn reply_to_karmafight_command(evt: &Event, dazeus: &DaZeusClient) {
-    if evt.len() > 5 {
-        let karmas = retrieve_all_karmas(evt, dazeus);
-        if karmas.len() == 1 {
-            dazeus.reply(&evt, "What kind of fight would this be?", true);
-        } else {
-            let highest = find_highest_karma(karmas);
-
-            if highest.len() == 1 {
-                let first = highest.first().unwrap();
-                dazeus.reply(&evt, &format!("{} wins with {}", first.original_term, first.votes.to_string())[..], false);
-            } else {
-                let terms = highest.iter().map(|e| e.original_term.clone() ).collect::<Vec<String>>().connect(", ");
-                let karma = highest.first().unwrap().votes.total();
-                dazeus.reply(&evt, &format!("{} all have the same karma: {}", terms, karma)[..], false);
-            }
-        }
-    } else {
+pub fn reply_to_karmafight_command(evt: &Event, dazeus: &dyn DaZeusClient) {
+    let highlight_char = &dazeus.get_highlight_char().unwrap_or_default();
+    if evt.len() <= 5 {
+        info!(
+            "{}karmafight command in {}/{} from '{}' with no terms",
+            highlight_char, &evt[0], &evt[2], &evt[1]
+        );
         dazeus.reply(&evt, "What should the fight be between?", true);
-    }
-}
-
-fn get_change_totals(changes: Vec<Karma>) -> Vec<Karma> {
-    // collect changes for every term in a single struct
-    let mut totals: Vec<Karma> = Vec::new();
-    for current in changes {
-        let updated = {
-            match totals.iter_mut().find(|elem| elem.term == current.term) {
-                Some(elem) => {
-                    elem.change.up += current.change.up;
-                    elem.change.down += current.change.down;
-                    elem.style = KarmaStyle::most_explicit(elem.style, current.style);
-                    true
-                },
-                None => false,
-            }
-        };
-        if !updated {
-            totals.push(current.clone());
-        }
+        return;
     }
 
-    // remove all pointless karma changes
-    totals
-        .iter()
-        .filter_map(|elem| if elem.change.up != elem.change.down { Some(elem.clone()) } else { None })
-        .collect()
-}
+    // Retrieve all the KarmaGroups.
+    let karmas = retrieve_all_karma_groups(evt, dazeus);
+    if karmas.len() == 1 {
+        info!(
+            "{}karmafight command in {}/{} from '{}' with only one term",
+            highlight_char, &evt[0], &evt[2], &evt[1]
+        );
+        dazeus.reply(
+            &evt,
+            "Only one term. What kind of fight would this be?",
+            true,
+        );
+        return;
+    }
 
-fn store_karma_change(change: &Karma, scope: Scope, dazeus: &DaZeusClient) -> Result<KarmaValue, Box<Error>> {
-    let property = format!("{}{}", ::karma::STORE_PREFIX, &change.term[..]);
-    let current = dazeus.get_property(&property[..].to_ascii_lowercase(), scope.clone());
-    let mut karma = match current.get_str("value") {
-        Some(s) => try!(KarmaValue::from_str(s)),
-        None => KarmaValue::new(&change.term[..]),
+    // Determine the winner.
+    let highest = find_highest_karma(karmas);
+    let reply = if highest.len() == 1 {
+        let first = highest.first().unwrap();
+        format!("{} wins with {}", first, first.votes())
+    } else {
+        let terms = highest
+            .iter()
+            .map(|kg| &kg.main[..])
+            .collect::<Vec<&str>>()
+            .join(", ");
+        let karma = highest.first().unwrap().votes().total();
+        format!("{} all have the same karma: {}", terms, karma)
     };
-    karma.vote(change);
-    dazeus.set_property(&property[..].to_ascii_lowercase(), &karma.to_json().to_string()[..], scope.clone());
-    Ok(karma)
+    info!(
+        "reply to {}karmafight command in {}/{} from '{}': {}",
+        highlight_char, &evt[0], &evt[2], &evt[1], &reply
+    );
+    dazeus.reply(&evt, &reply, false);
 }
 
-fn find_highest_karma(karmas: Vec<KarmaValue>) -> Vec<KarmaValue> {
-    let mut highest: Vec<KarmaValue> = Vec::new();
-    for item in karmas {
-        if highest.len() == 0 || highest.first().unwrap().votes.total() == item.votes.total() {
-            highest.push(item);
-        } else if item.votes.total() > highest.first().unwrap().votes.total() {
-            highest.clear();
-            highest.push(item);
+fn retrieve_all_karma_groups(evt: &Event, dazeus: &dyn DaZeusClient) -> Vec<KarmaGroup> {
+    let scope = Scope::network(&evt[0]);
+    let mut karma_groups = Vec::new();
+    for term in evt.params.iter().skip(5) {
+        let term = canonicalize_term(term);
+        if !karma_groups
+            .iter()
+            .any(|kg: &KarmaGroup| kg.karmas.contains_key(&term))
+        {
+            karma_groups.push(KarmaGroup::get_from_dazeus_or_new(
+                dazeus,
+                scope.clone(),
+                &term,
+            ))
         }
     }
-
-    highest.sort_by(|a, b| a.votes.up.cmp(&b.votes.up));
-    highest
+    karma_groups
 }
 
-fn retrieve_all_karmas(evt: &Event, dazeus: &DaZeusClient) -> Vec<KarmaValue> {
-    let mut karmas = Vec::new();
-    for key in 5..evt.len() {
-        if !karmas.iter().any(|e: &KarmaValue| e.term == &evt[key]) {
-            karmas.push(match KarmaValue::from_dazeus(dazeus, Scope::network(&evt[0]), &evt[key]) {
-                Ok(karma) => karma,
-                _ => KarmaValue::new(&evt[key])
-            });
-        }
+fn find_highest_karma(mut karmas: Vec<KarmaGroup>) -> Vec<KarmaGroup> {
+    karmas.sort_by(|kg1, kg2| kg2.votes().total().cmp(&kg1.votes().total()));
+    let highest_karma_value = karmas.first().map(|kg| kg.votes().total());
+    while karmas.last().map(|kg| kg.votes().total()) < highest_karma_value {
+        karmas.pop().unwrap();
     }
     karmas
+}
+
+pub fn reply_to_karmalink_command(evt: &Event, dazeus: &dyn DaZeusClient) {
+    let highlight_char = &dazeus.get_highlight_char().unwrap_or_default();
+    let args = &evt.params[5..];
+
+    if args.len() == 1 {
+        // Just list some info about the group that this term belongs to.
+        karmalink_stat(evt, dazeus, &args[0]);
+        return;
+    }
+    if args.len() == 2 || args[args.len() - 2] != "into" {
+        // Bad syntax, return help string.
+        let reply = format!("Usage: {}karmalink X Y into Z", highlight_char);
+        dazeus.reply(&evt, &reply, true);
+        return;
+    }
+
+    let terms = &args[0..args.len() - 2];
+    let main = &args[args.len() - 1];
+    karmalink_link(evt, dazeus, terms, main);
+}
+
+fn karmalink_stat(evt: &Event, dazeus: &dyn DaZeusClient, term: &String) {
+    let scope = Scope::network(&evt[0]);
+    let highlight_char = &dazeus.get_highlight_char().unwrap_or_default();
+    let kg = KarmaGroup::get_from_dazeus_or_new(dazeus, scope, term);
+    let mut reply = String::new();
+    kg.describe_structure(&mut reply)
+        .expect("fmt operation failed");
+    info!(
+        "reply to {}karmalink (stat) command in {}/{} from '{}': {}",
+        highlight_char, &evt[0], &evt[2], &evt[1], &reply
+    );
+    dazeus.reply(&evt, &reply, false);
+}
+
+fn karmalink_link(evt: &Event, dazeus: &dyn DaZeusClient, terms: &[String], main: &String) {
+    // TODO(dsprenkels): Refactor the linking logic into a separate funtion
+    // in the karma module.
+
+    let scope = Scope::network(&evt[0]);
+    let highlight_char = &dazeus.get_highlight_char().unwrap_or_default();
+
+    // Check whether some of the terms are already in a group.
+    let mut already_linked = Vec::new();
+    for term in std::iter::once(main).chain(terms.iter()) {
+        let kg = KarmaGroup::get_from_dazeus_or_new(dazeus, scope.clone(), term);
+        if kg.karmas.len() > 1 {
+            already_linked.push(term);
+        }
+    }
+
+    // If some of the terms are already linked, refuse to re-link them.  If the
+    // user requested to link "into Z", where Z is already linked, but also a
+    // main concept in its group, then we allow the user to expand this group.
+    if !already_linked.is_empty() || (already_linked.len() == 1 && already_linked[0] != main) {
+        let already_linked = already_linked
+            .iter()
+            .map(|term| format!("'{}'", term))
+            .collect::<Vec<_>>()
+            .join(", ");
+        info!(
+            "{}karmalink command in {}/{} from '{}': refusing because [{}] already linked",
+            highlight_char, &evt[0], &evt[2], &evt[1], already_linked
+        );
+        let reply = format!(
+            "{} are already linked. Split first using {}karmaunlink X",
+            already_linked, highlight_char
+        );
+        dazeus.reply(&evt, &reply, true);
+        return;
+    }
+
+    // Expand all the groups.
+    let mut main_karma = Karma::get_from_dazeus_or_new(dazeus, scope.clone(), main);
+    let main_aliases = std::mem::replace(&mut main_karma.aliases, None);
+    let mut from_other = Vec::new();
+    if let Some(Aliases::FromOther(vec)) = main_aliases {
+        from_other = vec
+    }
+    for term in terms {
+        let mut karma = Karma::get_from_dazeus_or_new(dazeus, scope.clone(), term);
+        karma.aliases = Some(Aliases::To(main_karma.term.to_owned()));
+        if let Err(err) = karma.save(scope.clone(), dazeus) {
+            error!("error linking terms: {}", err);
+            return;
+        }
+        from_other.push(karma.term);
+    }
+    let linked_count = from_other.len();
+    main_karma.aliases = Some(Aliases::FromOther(from_other));
+    if let Err(err) = main_karma.save(scope.clone(), dazeus) {
+        error!("error linking terms in main term: {}", err);
+        return;
+    }
+
+    // Log and reply to the user.
+    info!(
+        "{}karmalink command in {}/{} from '{}': linked {} terms to {}",
+        highlight_char, &evt[0], &evt[2], &evt[1], linked_count, &main_karma.term
+    );
+    let reply = format!(
+        "Linked {} terms together into {}",
+        linked_count, &main_karma.term
+    );
+    dazeus.reply(evt, &reply, false);
+}
+
+pub fn reply_to_karmaunlink_command(evt: &Event, dazeus: &dyn DaZeusClient) {
+    // TODO(dsprenkels): Refactor the unlinking logic into a separate funtion
+    // in the karma module.
+
+    let scope = Scope::network(&evt[0]);
+    let highlight_char = &dazeus.get_highlight_char().unwrap_or_default();
+    let term = &evt[5];
+
+    // Check if this term has a group that we can split.
+    let mut karma_group = KarmaGroup::get_from_dazeus_or_new(dazeus, scope.clone(), term);
+    if karma_group.karmas.is_empty() {
+        error!("new karma group should never be empty");
+        return;
+    }
+    if karma_group.karmas.len() == 1 {
+        let term = &karma_group.karmas.values().next().unwrap().term;
+        info!(
+            "{}karmaunlink command in {}/{} from '{}': {} is not linked",
+            highlight_char, &evt[0], &evt[2], &evt[1], term
+        );
+        let reply = format!("{} is not linked", &term);
+        dazeus.reply(evt, &reply, false);
+        return;
+    }
+
+    // Split the group.
+    for karma in karma_group.karmas.values_mut() {
+        karma.aliases = None;
+        if let Err(err) = karma.save(scope.clone(), dazeus) {
+            error!("error unlinking terms: {}", err);
+            return;
+        }
+    }
+
+    // Log and reply to the user.
+    let group_terms = karma_group
+        .karmas
+        .keys()
+        .map(|term| format!("'{}'", term))
+        .collect::<Vec<_>>()
+        .join(", ");
+    info!(
+        "{}karmaunlink command in {}/{} from '{}': unlinked {}",
+        highlight_char, &evt[0], &evt[2], &evt[1], group_terms
+    );
+    let reply = format!("Ack, unlinked {}", group_terms);
+    dazeus.reply(evt, &reply, false);
+}
+
+pub fn reply_with_redirect(to: &'static str, evt: &Event, dazeus: &dyn DaZeusClient) {
+    let msg = match dazeus.get_highlight_char() {
+        Some(highlight_char) => format!("Use '{}{}'", highlight_char, to),
+        None => format!("Use '{}' command", to),
+    };
+    dazeus.reply(&evt, &msg, true);
 }
